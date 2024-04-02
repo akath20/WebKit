@@ -72,6 +72,7 @@ class RenderStyle;
 class SVGQualifiedName;
 class ShadowRoot;
 class TouchEvent;
+class TrustedScript;
 class WebCoreOpaqueRoot;
 
 namespace Style {
@@ -90,7 +91,7 @@ enum class MutationObserverOptionType : uint8_t;
 using MutationObserverOptions = OptionSet<MutationObserverOptionType>;
 using MutationRecordDeliveryOptions = OptionSet<MutationObserverOptionType>;
 
-using NodeOrString = std::variant<RefPtr<Node>, String>;
+using NodeOrStringOrTrustedScript = std::variant<RefPtr<Node>, String, RefPtr<TrustedScript>>;
 
 const int initialNodeVectorSize = 11; // Covers 99.5%. See webkit.org/b/80706
 typedef Vector<Ref<Node>, initialNodeVectorSize> NodeVector;
@@ -217,9 +218,9 @@ public:
     WEBCORE_EXPORT Element* nextElementSibling() const;
 
     // From the ChildNode - https://dom.spec.whatwg.org/#childnode
-    ExceptionOr<void> before(FixedVector<NodeOrString>&&);
-    ExceptionOr<void> after(FixedVector<NodeOrString>&&);
-    ExceptionOr<void> replaceWith(FixedVector<NodeOrString>&&);
+    ExceptionOr<void> before(FixedVector<NodeOrStringOrTrustedScript>&&);
+    ExceptionOr<void> after(FixedVector<NodeOrStringOrTrustedScript>&&);
+    ExceptionOr<void> replaceWith(FixedVector<NodeOrStringOrTrustedScript>&&);
     WEBCORE_EXPORT ExceptionOr<void> remove();
 
     // Other methods (not part of DOM)
@@ -264,8 +265,8 @@ public:
     bool hasShadowRootContainingSlots() const { return hasEventTargetFlag(EventTargetFlag::HasShadowRootContainingSlots); }
     void setHasShadowRootContainingSlots(bool flag) { setEventTargetFlag(EventTargetFlag::HasShadowRootContainingSlots, flag); }
 
-    bool needsSVGRendererUpdate() const { return hasStateFlag(StateFlag::NeedsSVGRendererUpdate); }
-    void setNeedsSVGRendererUpdate(bool flag) { setStateFlag(StateFlag::NeedsSVGRendererUpdate, flag); }
+    bool needsSVGRendererUpdate() const { return hasElementStateFlag(ElementStateFlag::NeedsSVGRendererUpdate); }
+    void setNeedsSVGRendererUpdate(bool flag) { setElementStateFlag(ElementStateFlag::NeedsSVGRendererUpdate, flag); }
 
     // If this node is in a shadow tree, returns its shadow host. Otherwise, returns null.
     WEBCORE_EXPORT Element* shadowHost() const;
@@ -290,9 +291,9 @@ public:
     bool isPrecustomizedCustomElement() const { return customElementState() == CustomElementState::FailedOrPrecustomized && !isUnknownElement(); }
     bool isPrecustomizedOrDefinedCustomElement() const { return isPrecustomizedCustomElement() || isDefinedCustomElement(); }
 
-    bool isInCustomElementReactionQueue() const { return hasStateFlag(StateFlag::IsInCustomElementReactionQueue); }
-    void setIsInCustomElementReactionQueue() { setStateFlag(StateFlag::IsInCustomElementReactionQueue); }
-    void clearIsInCustomElementReactionQueue() { clearStateFlag(StateFlag::IsInCustomElementReactionQueue); }
+    bool isInCustomElementReactionQueue() const { return hasElementStateFlag(ElementStateFlag::IsInCustomElementReactionQueue); }
+    void setIsInCustomElementReactionQueue() { setElementStateFlag(ElementStateFlag::IsInCustomElementReactionQueue); }
+    void clearIsInCustomElementReactionQueue() { clearElementStateFlag(ElementStateFlag::IsInCustomElementReactionQueue); }
 
     // Returns null, a child of ShadowRoot, or a legacy shadow root.
     Node* nonBoundaryShadowTreeRootNode();
@@ -350,8 +351,8 @@ public:
     virtual void notifyLoadedSheetAndAllCriticalSubresources(bool /* error loading subresource */) { }
     virtual void startLoadingDynamicSheet() { ASSERT_NOT_REACHED(); }
 
-    bool isUserActionElement() const { return hasStateFlag(StateFlag::IsUserActionElement); }
-    void setUserActionElement(bool flag) { setStateFlag(StateFlag::IsUserActionElement, flag); }
+    bool isUserActionElement() const { return hasElementStateFlag(ElementStateFlag::IsUserActionElement); }
+    void setUserActionElement(bool flag) { setElementStateFlag(ElementStateFlag::IsUserActionElement, flag); }
 
     bool inRenderedDocument() const;
     bool needsStyleRecalc() const { return styleValidity() != Style::Validity::Valid || hasInvalidRenderer(); }
@@ -603,6 +604,9 @@ public:
 
     bool deletionHasBegun() const { return hasStateFlag(StateFlag::HasStartedDeletion); }
 
+    bool containsSelectionEndPoint() const { return hasStateFlag(StateFlag::ContainsSelectionEndPoint); }
+    void setContainsSelectionEndPoint(bool value) { setStateFlag(StateFlag::ContainsSelectionEndPoint, value); }
+
 protected:
     enum class TypeFlag : uint16_t {
         IsCharacterData = 1 << 0,
@@ -627,28 +631,31 @@ protected:
 
     enum class StateFlag : uint16_t {
         IsLink = 1 << 0,
-        IsUserActionElement = 1 << 1,
-        IsParsingChildren = 1 << 2,
-        EverHadSmoothScroll = 1 << 3,
-        SelfOrPrecedingNodesAffectDirAuto = 1 << 4,
-        EffectiveLangKnownToMatchDocumentElement = 1 << 5,
-        IsComputedStyleInvalidFlag = 1 << 6,
-        NeedsSVGRendererUpdate = 1 << 7,
-        NeedsUpdateQueryContainerDependentStyle = 1 << 8,
-#if ENABLE(FULLSCREEN_API)
-        IsFullscreen = 1 << 9,
-#endif
-        HasInvalidRenderer = 1 << 10,
-        ContainsOnlyASCIIWhitespace = 1 << 11, // Only used on CharacterData.
-        ContainsOnlyASCIIWhitespaceIsValid = 1 << 12, // Only used on CharacterData.
-        HasHeldBackChildrenChanged = 1 << 13,
-        HasStartedDeletion = 1 << 14,
-        IsInCustomElementReactionQueue = 1 << 15,
+        IsParsingChildren = 1 << 1,
+        SelfOrPrecedingNodesAffectDirAuto = 1 << 2,
+        EffectiveLangKnownToMatchDocumentElement = 1 << 3,
+        IsComputedStyleInvalidFlag = 1 << 4,
+        HasInvalidRenderer = 1 << 5,
+        ContainsOnlyASCIIWhitespace = 1 << 6, // Only used on CharacterData.
+        ContainsOnlyASCIIWhitespaceIsValid = 1 << 7, // Only used on CharacterData.
+        HasHeldBackChildrenChanged = 1 << 8,
+        HasStartedDeletion = 1 << 9,
+        ContainsSelectionEndPoint = 1 << 10,
+        // 5-bits free.
     };
 
     enum class ElementStateFlag : uint16_t {
         HasElementIdentifier = 1 << 0,
-        // 15-bits free.
+        IsUserActionElement = 1 << 1,
+        IsInCustomElementReactionQueue = 1 << 2,
+        NeedsSVGRendererUpdate = 1 << 3,
+        NeedsUpdateQueryContainerDependentStyle = 1 << 4,
+        EverHadSmoothScroll = 1 << 5,
+        CapturedInViewTransition = 1 << 6,
+#if ENABLE(FULLSCREEN_API)
+        IsFullscreen = 1 << 7,
+#endif
+        // 8-bits free.
     };
 
     enum class TabIndexState : uint8_t {
@@ -761,9 +768,9 @@ protected:
     template<typename NodeClass>
     static NodeClass& traverseToRootNodeInternal(const NodeClass&);
 
-    // FIXME: Replace all uses of convertNodesOrStringsIntoNode by convertNodesOrStringsIntoNodeVector.
-    ExceptionOr<RefPtr<Node>> convertNodesOrStringsIntoNode(FixedVector<NodeOrString>&&);
-    ExceptionOr<NodeVector> convertNodesOrStringsIntoNodeVector(FixedVector<NodeOrString>&&);
+    // FIXME: Replace all uses of convertNodesOrStringsOrTrustedScriptsIntoNode by convertNodesOrStringsOrTrustedScriptsIntoNodeVector.
+    ExceptionOr<RefPtr<Node>> convertNodesOrStringsOrTrustedScriptsIntoNode(RefPtr<Node>, FixedVector<NodeOrStringOrTrustedScript>&&);
+    ExceptionOr<NodeVector> convertNodesOrStringsOrTrustedScriptsIntoNodeVector(RefPtr<Node>, FixedVector<NodeOrStringOrTrustedScript>&&);
 
 private:
     virtual PseudoId customPseudoId() const

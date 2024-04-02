@@ -229,17 +229,19 @@ AccessibilityObject* AccessibilityRenderObject::firstChild() const
     if (!m_renderer)
         return AccessibilityNodeObject::firstChild();
     
-    RenderObject* firstChild = firstChildConsideringContinuation(*m_renderer);
+    if (auto* firstChild = firstChildConsideringContinuation(*m_renderer)) {
+        auto* cache = axObjectCache();
+        return cache ? cache->getOrCreate(*firstChild) : nullptr;
+    }
 
     // If an object can't have children, then it is using this method to help
     // calculate some internal property (like its description).
     // In this case, it should check the Node level for children in case they're
     // not rendered (like a <meter> element).
-    if (!firstChild && !canHaveChildren())
+    if (!canHaveChildren())
         return AccessibilityNodeObject::firstChild();
 
-    auto objectCache = axObjectCache();
-    return objectCache ? objectCache->getOrCreate(firstChild) : nullptr;
+    return nullptr;
 }
 
 AccessibilityObject* AccessibilityRenderObject::lastChild() const
@@ -247,13 +249,15 @@ AccessibilityObject* AccessibilityRenderObject::lastChild() const
     if (!m_renderer)
         return AccessibilityNodeObject::lastChild();
 
-    RenderObject* lastChild = lastChildConsideringContinuation(*m_renderer);
+    if (auto* lastChild = lastChildConsideringContinuation(*m_renderer)) {
+        auto* cache = axObjectCache();
+        return cache ? cache->getOrCreate(lastChild) : nullptr;
+    }
 
-    if (!lastChild && !canHaveChildren())
+    if (!canHaveChildren())
         return AccessibilityNodeObject::lastChild();
 
-    auto objectCache = axObjectCache();
-    return objectCache ? objectCache->getOrCreate(lastChild) : nullptr;
+    return nullptr;
 }
 
 static inline RenderInline* startOfContinuations(RenderObject& renderer)
@@ -355,10 +359,8 @@ AccessibilityObject* AccessibilityRenderObject::previousSibling() const
     if (!previousSibling)
         return nullptr;
 
-    if (auto* objectCache = axObjectCache())
-        return objectCache->getOrCreate(previousSibling);
-
-    return nullptr;
+    auto* cache = axObjectCache();
+    return cache ? cache->getOrCreate(*previousSibling) : nullptr;
 }
 
 static inline bool lastChildHasContinuation(RenderElement& renderer)
@@ -426,11 +428,11 @@ AccessibilityObject* AccessibilityRenderObject::nextSibling() const
     // After case 4, there are chances that nextSibling has the same node as the current renderer,
     // which might lead to adding the same child repeatedly.
     if (nextSibling->node() && nextSibling->node() == m_renderer->node()) {
-        if (auto* nextObject = objectCache->getOrCreate(nextSibling))
+        if (auto* nextObject = objectCache->getOrCreate(*nextSibling))
             return nextObject->nextSibling();
     }
 
-    auto* nextObject = objectCache->getOrCreate(nextSibling);
+    auto* nextObject = objectCache->getOrCreate(*nextSibling);
     auto* nextObjectParent = nextObject ? nextObject->parentObject() : nullptr;
     auto* thisParent = parentObject();
     // Make sure next sibling has the same parent.
@@ -547,7 +549,7 @@ AccessibilityObject* AccessibilityRenderObject::parentObject() const
     // Expose markers that are not direct children of a list item too.
     if (m_renderer->isRenderListMarker()) {
         if (auto* listItem = ancestorsOfType<RenderListItem>(*m_renderer).first()) {
-            auto* parent = axObjectCache()->getOrCreate(listItem);
+            auto* parent = axObjectCache()->getOrCreate(*listItem);
             if (parent && uncheckedDowncast<AccessibilityRenderObject>(*parent).markerRenderer() == m_renderer)
                 return parent;
         }
@@ -555,11 +557,11 @@ AccessibilityObject* AccessibilityRenderObject::parentObject() const
 #endif
 
     if (auto* parentObject = renderParentObject())
-        return cache->getOrCreate(parentObject);
+        return cache->getOrCreate(*parentObject);
 
     // WebArea's parent should be the scroll view containing it.
     if (isWebArea())
-        return cache->getOrCreate(&m_renderer->view().frameView());
+        return cache->getOrCreate(m_renderer->view().frameView());
 
     return nullptr;
 }
@@ -604,7 +606,7 @@ Element* AccessibilityRenderObject::anchorElement() const
     for (currentRenderer = renderer(); currentRenderer && !currentRenderer->node(); currentRenderer = currentRenderer->parent()) {
         if (currentRenderer->isAnonymousBlock()) {
             if (auto* continuation = uncheckedDowncast<RenderBlock>(*currentRenderer).continuation())
-                return cache->getOrCreate(continuation)->anchorElement();
+                return cache->getOrCreate(*continuation)->anchorElement();
         }
     }
 
@@ -654,7 +656,7 @@ String AccessibilityRenderObject::helpText() const
 
         // Only take help text from an ancestor element if its a group or an unknown role. If help was 
         // added to those kinds of elements, it is likely it was meant for a child element.
-        if (auto* axAncestor = axObjectCache()->getOrCreate(ancestor)) {
+        if (auto* axAncestor = axObjectCache()->getOrCreate(*ancestor)) {
             if (!axAncestor->isGroup() && axAncestor->roleValue() != AccessibilityRole::Unknown)
                 break;
         }
@@ -663,7 +665,7 @@ String AccessibilityRenderObject::helpText() const
     return { };
 }
 
-String AccessibilityRenderObject::textUnderElement(AccessibilityTextUnderElementMode mode) const
+String AccessibilityRenderObject::textUnderElement(TextUnderElementMode mode) const
 {
     if (!m_renderer)
         return AccessibilityNodeObject::textUnderElement(mode);
@@ -680,7 +682,7 @@ String AccessibilityRenderObject::textUnderElement(AccessibilityTextUnderElement
 
     // We use a text iterator for text objects AND for those cases where we are
     // explicitly asking for the full text under a given element.
-    if (is<RenderText>(*m_renderer) || mode.childrenInclusion == AccessibilityTextUnderElementMode::TextUnderElementModeIncludeAllChildren) {
+    if (is<RenderText>(*m_renderer) || mode.childrenInclusion == TextUnderElementMode::Children::IncludeAllChildren) {
         // If possible, use a text iterator to get the text, so that whitespace
         // is handled consistently.
         Document* nodeDocument = nullptr;
@@ -728,7 +730,7 @@ String AccessibilityRenderObject::textUnderElement(AccessibilityTextUnderElement
     return AccessibilityNodeObject::textUnderElement(mode);
 }
 
-bool AccessibilityRenderObject::shouldGetTextFromNode(AccessibilityTextUnderElementMode mode) const
+bool AccessibilityRenderObject::shouldGetTextFromNode(TextUnderElementMode mode) const
 {
     if (!m_renderer)
         return true;
@@ -737,7 +739,7 @@ bool AccessibilityRenderObject::shouldGetTextFromNode(AccessibilityTextUnderElem
     // the child nodes to define positions. CSS tables and their anonymous descendants lack
     // children with nodes.
     if (m_renderer->isAnonymous() && m_renderer->isTablePart())
-        return mode.childrenInclusion == AccessibilityTextUnderElementMode::TextUnderElementModeIncludeAllChildren;
+        return mode.childrenInclusion == TextUnderElementMode::Children::IncludeAllChildren;
 
     // AccessibilityRenderObject::textUnderElement() calls rangeOfContents() to create the text
     // range. rangeOfContents() does not include CSS-generated content.
@@ -955,7 +957,6 @@ Path AccessibilityRenderObject::elementPath() const
         return path;
     }
 
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
     if (auto* renderSVGShape = dynamicDowncast<RenderSVGShape>(*m_renderer); renderSVGShape && renderSVGShape->hasPath()) {
         Path path = renderSVGShape->path();
 
@@ -970,7 +971,6 @@ Path AccessibilityRenderObject::elementPath() const
         }
         return path;
     }
-#endif
 
     return { };
 }
@@ -1029,7 +1029,7 @@ void AccessibilityRenderObject::labelText(Vector<AccessibilityText>& textOrder) 
 AXCoreObject* AccessibilityRenderObject::titleUIElement() const
 {
     if (m_renderer && isFieldset())
-        return axObjectCache()->getOrCreate(dynamicDowncast<RenderBlock>(m_renderer.get())->findFieldsetLegend(RenderBlock::FieldsetIncludeFloatingOrOutOfFlow));
+        return axObjectCache()->getOrCreate(dynamicDowncast<RenderBlock>(*m_renderer)->findFieldsetLegend(RenderBlock::FieldsetIncludeFloatingOrOutOfFlow));
     return AccessibilityNodeObject::titleUIElement();
 }
     
@@ -1643,20 +1643,10 @@ Widget* AccessibilityRenderObject::widget() const
     return renderWidget ? renderWidget->widget() : nullptr;
 }
 
-AccessibilityObject* AccessibilityRenderObject::accessibilityParentForImageMap(HTMLMapElement* map) const
+AccessibilityObject* AccessibilityRenderObject::associatedAXImage(HTMLMapElement& map) const
 {
-    // find an image that is using this map
-    if (!map)
-        return nullptr;
-
-    RefPtr imageElement = map->imageElement();
-    if (!imageElement)
-        return nullptr;
-    
-    if (CheckedPtr cache = axObjectCache())
-        return cache->getOrCreate(imageElement.get());
-    
-    return nullptr;
+    CheckedPtr cache = axObjectCache();
+    return cache ? cache->getOrCreate(map.imageElement().get()) : nullptr;
 }
 
 AXCoreObject::AccessibilityChildrenVector AccessibilityRenderObject::documentLinks()
@@ -1669,7 +1659,7 @@ AXCoreObject::AccessibilityChildrenVector AccessibilityRenderObject::documentLin
     Ref<HTMLCollection> links = document.links();
     for (unsigned i = 0; auto* current = links->item(i); ++i) {
         if (auto* renderer = current->renderer()) {
-            RefPtr<AccessibilityObject> axObject = document.axObjectCache()->getOrCreate(renderer);
+            RefPtr<AccessibilityObject> axObject = document.axObjectCache()->getOrCreate(*renderer);
             ASSERT(axObject);
             if (!axObject->accessibilityIsIgnored() && axObject->isLink())
                 result.append(axObject);
@@ -1689,7 +1679,7 @@ AXCoreObject::AccessibilityChildrenVector AccessibilityRenderObject::documentLin
                     auto& areaObject = uncheckedDowncast<AccessibilityImageMapLink>(*axObjectCache()->create(AccessibilityRole::ImageMapLink));
                     areaObject.setHTMLAreaElement(uncheckedDowncast<HTMLAreaElement>(current));
                     areaObject.setHTMLMapElement(parentMap);
-                    areaObject.setParent(accessibilityParentForImageMap(parentMap));
+                    areaObject.setParent(associatedAXImage(*parentMap));
                     result.append(&areaObject);
                 }
             }
@@ -1766,7 +1756,7 @@ bool AccessibilityRenderObject::nodeIsTextControl(const Node* node) const
         return false;
 
     if (AXObjectCache* cache = axObjectCache()) {
-        if (AccessibilityObject* axObjectForNode = cache->getOrCreate(const_cast<Node*>(node)))
+        if (AccessibilityObject* axObjectForNode = cache->getOrCreate(const_cast<Node&>(*node)))
             return axObjectForNode->isTextControl();
     }
 
@@ -1989,20 +1979,14 @@ IntRect AccessibilityRenderObject::doAXBoundsForRangeUsingCharacterOffset(const 
     return boundsForRange(*range);
 }
 
-AccessibilityObject* AccessibilityRenderObject::accessibilityImageMapHitTest(HTMLAreaElement* area, const IntPoint& point) const
+AccessibilityObject* AccessibilityRenderObject::accessibilityImageMapHitTest(HTMLAreaElement& area, const IntPoint& point) const
 {
-    if (!area)
+    auto* mapAncestor = ancestorsOfType<HTMLMapElement>(area).first();
+    auto* associatedImage = mapAncestor ? associatedAXImage(*mapAncestor) : nullptr;
+    if (!associatedImage)
         return nullptr;
 
-    auto* mapParent = ancestorsOfType<HTMLMapElement>(*area).first();
-    if (!mapParent)
-        return nullptr;
-
-    auto* parent = accessibilityParentForImageMap(mapParent);
-    if (!parent)
-        return nullptr;
-
-    for (const auto& child : parent->children()) {
+    for (const auto& child : associatedImage->children()) {
         if (child->elementRect().contains(point))
             return dynamicDowncast<AccessibilityObject>(child.get());
     }
@@ -2028,46 +2012,33 @@ AccessibilityObject* AccessibilityRenderObject::elementAccessibilityHitTest(cons
     return AccessibilityObject::elementAccessibilityHitTest(point);
 }
     
-static bool shouldUseShadowHostForHitTesting(Node* shadowHost)
-{
-    // We need to allow automation of mouse events on video tags.
-    return shadowHost && !shadowHost->hasTagName(videoTag);
-}
-
 AccessibilityObject* AccessibilityRenderObject::accessibilityHitTest(const IntPoint& point) const
 {
     if (!m_renderer || !m_renderer->hasLayer())
         return nullptr;
 
     m_renderer->document().updateLayout();
-
+    // Layout may have destroyed this renderer or layer, so re-check their presence.
     if (!m_renderer || !m_renderer->hasLayer())
         return nullptr;
 
-    auto* layer = uncheckedDowncast<RenderBox>(*m_renderer).layer();
-
     constexpr OptionSet<HitTestRequest::Type> hitType { HitTestRequest::Type::ReadOnly, HitTestRequest::Type::Active, HitTestRequest::Type::AccessibilityHitTest };
     HitTestResult hitTestResult { point };
-    layer->hitTest(hitType, hitTestResult);
-    Node* node = hitTestResult.innerNode();
+
+    dynamicDowncast<RenderLayerModelObject>(*m_renderer)->layer()->hitTest(hitType, hitTestResult);
+    RefPtr node = hitTestResult.innerNode();
     if (!node)
         return nullptr;
-    Node* shadowAncestorNode = node->shadowHost();
-    if (shouldUseShadowHostForHitTesting(shadowAncestorNode))
-        node = shadowAncestorNode;
-    ASSERT(node);
 
-    if (auto* textarea = dynamicDowncast<HTMLAreaElement>(*node))
-        return accessibilityImageMapHitTest(textarea, point);
-    
-    if (RefPtr option = dynamicDowncast<HTMLOptionElement>(*node))
+    if (auto* area = dynamicDowncast<HTMLAreaElement>(*node))
+        return accessibilityImageMapHitTest(*area, point);
+
+    if (auto* option = dynamicDowncast<HTMLOptionElement>(*node))
         node = option->ownerSelectElement();
-    
+
     auto* renderer = node->renderer();
-    if (!renderer)
-        return nullptr;
-    
-    auto* result = renderer->document().axObjectCache()->getOrCreate(renderer);
+    auto* cache = renderer ? renderer->document().axObjectCache() : nullptr;
+    RefPtr result = cache ? cache->getOrCreate(*renderer) : nullptr;
     if (!result)
         return nullptr;
 
@@ -2083,8 +2054,7 @@ AccessibilityObject* AccessibilityRenderObject::accessibilityHitTest(const IntPo
 
         result = result->parentObjectUnignored();
     }
-
-    return result;
+    return result.get();
 }
 
 bool AccessibilityRenderObject::renderObjectIsObservable(RenderObject& renderer) const
@@ -2114,7 +2084,7 @@ AccessibilityObject* AccessibilityRenderObject::observableObject() const
     for (RenderObject* renderer = this->renderer(); renderer && renderer->node(); renderer = renderer->parent()) {
         if (renderObjectIsObservable(*renderer)) {
             if (AXObjectCache* cache = axObjectCache())
-                return cache->getOrCreate(renderer);
+                return cache->getOrCreate(*renderer);
         }
     }
 
@@ -2384,7 +2354,7 @@ AccessibilitySVGRoot* AccessibilityRenderObject::remoteSVGRootElement(CreationCh
     if (!cache)
         return nullptr;
 
-    auto* rootSVGObject = createIfNecessary == Create ? cache->getOrCreate(rendererRoot) : cache->get(rendererRoot);
+    auto* rootSVGObject = createIfNecessary == Create ? cache->getOrCreate(*rendererRoot) : cache->get(rendererRoot);
     ASSERT(!createIfNecessary || rootSVGObject);
     return dynamicDowncast<AccessibilitySVGRoot>(rootSVGObject);
 }
@@ -2424,8 +2394,8 @@ void AccessibilityRenderObject::addAttachmentChildren()
     Widget* widget = widgetForAttachmentView();
     if (!widget || !(widget->isLocalFrameView() || widget->isRemoteFrameView()))
         return;
-    
-    addChild(axObjectCache()->getOrCreate(widget));
+
+    addChild(axObjectCache()->getOrCreate(*widget));
 }
 
 #if PLATFORM(COCOA)
@@ -2465,7 +2435,7 @@ void AccessibilityRenderObject::addNodeOnlyChildren()
         if (child->renderer())
             continue;
 
-        if (nodeHasDisplayContents(*child) || isNodeAriaVisible(child)) {
+        if (nodeHasDisplayContents(*child) || isNodeAriaVisible(*child)) {
             hasNodeOnlyChildren = true;
             break;
         }
@@ -2497,14 +2467,14 @@ void AccessibilityRenderObject::addNodeOnlyChildren()
             continue;
         }
 
-        if (!nodeHasDisplayContents(*child) && !isNodeAriaVisible(child))
+        if (!nodeHasDisplayContents(*child) && !isNodeAriaVisible(*child))
             continue;
 
         unsigned previousSize = m_children.size();
         if (insertionIndex > previousSize)
             insertionIndex = previousSize;
 
-        insertChild(cache->getOrCreate(child), insertionIndex);
+        insertChild(cache->getOrCreate(*child), insertionIndex);
         insertionIndex += (m_children.size() - previousSize);
     }
 }
@@ -2521,7 +2491,7 @@ RenderObject* AccessibilityRenderObject::markerRenderer() const
 void AccessibilityRenderObject::addListItemMarker()
 {
     if (auto* marker = markerRenderer())
-        insertChild(axObjectCache()->getOrCreate(marker), 0);
+        insertChild(axObjectCache()->getOrCreate(*marker), 0);
 }
 #endif
 

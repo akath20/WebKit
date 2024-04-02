@@ -1,6 +1,6 @@
 /*
  *  Copyright (C) 1999-2000 Harri Porten (porten@kde.org)
- *  Copyright (C) 2004-2023 Apple Inc. All rights reserved.
+ *  Copyright (C) 2004-2024 Apple Inc. All rights reserved.
  *  Copyright (C) 2006 Bjoern Graf (bjoern.graf@gmail.com)
  *
  *  This library is free software; you can redistribute it and/or
@@ -521,7 +521,7 @@ long StopWatch::getElapsedMS()
 template<typename Vector>
 static inline String stringFromUTF(const Vector& utf8)
 {
-    return String::fromUTF8WithLatin1Fallback(utf8.data(), utf8.size());
+    return String::fromUTF8WithLatin1Fallback(utf8.span());
 }
 
 static JSC_DECLARE_CUSTOM_GETTER(accessorMakeMasquerader);
@@ -1995,7 +1995,7 @@ JSC_DEFINE_HOST_FUNCTION(functionReadFile, (JSGlobalObject* globalObject, CallFr
         return throwVMError(globalObject, scope, "Could not open file."_s);
 
     if (!isBinary)
-        return JSValue::encode(jsString(vm, String::fromUTF8WithLatin1Fallback(content->data(), content->length())));
+        return JSValue::encode(jsString(vm, String::fromUTF8WithLatin1Fallback(content->span())));
 
     Structure* structure = globalObject->typedArrayStructure(TypeUint8, content->isResizableOrGrowableShared());
     JSObject* result = JSUint8Array::create(vm, structure, WTFMove(content));
@@ -3402,13 +3402,22 @@ static void startTimeoutTimer(Seconds duration)
     });
 }
 
+// The purpose of crashDueToJSCShellTimeout is solely to make it easier to distinquish
+// jsc shell test timeouts (i.e. crashDueToJSCShellTimeout is present in crash stack
+// traces) from other crashes.
+NO_RETURN_DUE_TO_CRASH NEVER_INLINE void crashDueToJSCShellTimeout();
+void crashDueToJSCShellTimeout()
+{
+    CRASH();
+}
+
 static void timeoutCheckCallback(VM& vm)
 {
     RELEASE_ASSERT(&vm == s_vm);
     auto cpuTime = CPUTime::forCurrentThread();
     if (cpuTime >= s_maxAllowedCPUTime) {
         dataLog("Timed out after ", s_timeoutDuration, " seconds!\n");
-        CRASH();
+        crashDueToJSCShellTimeout();
     }
     auto remainingTime = s_maxAllowedCPUTime - cpuTime;
     startTimeoutTimer(remainingTime);
@@ -3988,7 +3997,8 @@ void CommandLine::parseArguments(int argc, char** argv)
 
             SignalAction (*exit)(Signal, SigInfo&, PlatformRegisters&) = [] (Signal, SigInfo&, PlatformRegisters&) {
                 dataLogLn("Signal handler hit. Exiting with status 0");
-                terminateProcess(EXIT_SUCCESS);
+                // Deliberate exit with a SIGKILL code greater than 130.
+                terminateProcess(137);
                 return SignalAction::ForceDefault;
             };
 
@@ -4215,6 +4225,14 @@ int runJSC(const CommandLine& options, bool isWorker, const Func& func)
                 fprintf(stderr, "could not save profiler output.\n");
         }
 
+
+#if ENABLE(REGEXP_TRACING)
+        {
+            JSLockHolder locker(vm);
+            vm.dumpRegExpTrace();
+        }
+#endif
+
 #if ENABLE(JIT)
         {
             JSLockHolder locker(vm);
@@ -4331,6 +4349,9 @@ int jscmain(int argc, char** argv)
     if (UNLIKELY(Options::needDisassemblySupport()))
         JSC::JITOperationList::populateDisassemblyLabelsInEmbedder(&startOfJITOperationsInShell, &endOfJITOperationsInShell);
 #endif
+
+    if (!Options::maxHeapSizeAsRAMSizeMultiple())
+        Options::maxHeapSizeAsRAMSizeMultiple() = 2;
 
     initializeTimeoutIfNeeded();
 

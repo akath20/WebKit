@@ -91,6 +91,8 @@ class PDFPluginBase : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<PDF
     WTF_MAKE_FAST_ALLOCATED;
     WTF_MAKE_NONCOPYABLE(PDFPluginBase);
     friend class PDFIncrementalLoader;
+    friend class PDFPluginChoiceAnnotation;
+    friend class PDFPluginTextAnnotation;
 public:
     static WebCore::PluginInfo pluginInfo();
 
@@ -120,8 +122,8 @@ public:
     virtual RefPtr<WebCore::ShareableBitmap> snapshot() { return nullptr; }
     virtual void paint(WebCore::GraphicsContext&, const WebCore::IntRect&) { }
 
-    virtual CGFloat scaleFactor() const = 0;
-    virtual float contentScaleFactor() const = 0;
+    virtual double scaleFactor() const = 0;
+    virtual void setPageScaleFactor(double, std::optional<WebCore::IntPoint> origin) = 0;
 
     virtual CGFloat minScaleFactor() const { return 0.25; }
     virtual CGFloat maxScaleFactor() const { return 5; }
@@ -138,7 +140,6 @@ public:
     bool handlesPageScaleFactor() const;
     virtual void didBeginMagnificationGesture() { }
     virtual void didEndMagnificationGesture() { }
-    virtual void setPageScaleFactor(double, std::optional<WebCore::IntPoint> origin) = 0;
 
     void updateControlTints(WebCore::GraphicsContext&);
 
@@ -255,6 +256,9 @@ public:
 
     uint64_t streamedBytes() const;
 
+protected:
+    virtual double contentScaleFactor() const = 0;
+
 private:
     bool documentFinishedLoading() const { return m_documentFinishedLoading; }
     void ensureDataBufferLength(uint64_t) WTF_REQUIRES_LOCK(m_streamedDataLock);
@@ -267,7 +271,7 @@ private:
     // Returns the number of bytes copied.
     size_t copyDataAtPosition(void* buffer, uint64_t sourcePosition, size_t count) const;
     // FIXME: It would be nice to avoid having both the "copy into a buffer" and "return a pointer" ways of getting data.
-    const uint8_t* dataPtrForRange(uint64_t sourcePosition, size_t count, CheckValidRanges) const;
+    std::span<const uint8_t> dataPtrForRange(uint64_t sourcePosition, size_t count, CheckValidRanges) const;
     // Returns true only if we can satisfy all of the requests.
     bool getByteRanges(CFMutableArrayRef, const CFRange*, size_t count) const;
 

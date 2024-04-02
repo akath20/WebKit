@@ -162,12 +162,12 @@ public:
     ALWAYS_INLINE size_t find(char c, unsigned start = 0) const { return find(static_cast<LChar>(c), start); }
     template<typename CodeUnitMatchFunction, std::enable_if_t<std::is_invocable_r_v<bool, CodeUnitMatchFunction, UChar>>* = nullptr>
     size_t find(CodeUnitMatchFunction&&, unsigned start = 0) const;
-    ALWAYS_INLINE size_t find(ASCIILiteral literal, unsigned start = 0) const { return find(literal.characters8(), literal.length(), start); }
+    ALWAYS_INLINE size_t find(ASCIILiteral literal, unsigned start = 0) const { return find(literal.span8(), start); }
     WTF_EXPORT_PRIVATE size_t find(StringView, unsigned start = 0) const;
     WTF_EXPORT_PRIVATE size_t find(AdaptiveStringSearcherTables&, StringView, unsigned start = 0) const;
 
     size_t reverseFind(UChar, unsigned index = std::numeric_limits<unsigned>::max()) const;
-    ALWAYS_INLINE size_t reverseFind(ASCIILiteral literal, unsigned start = std::numeric_limits<unsigned>::max()) const { return reverseFind(literal.characters8(), literal.length(), start); }
+    ALWAYS_INLINE size_t reverseFind(ASCIILiteral literal, unsigned start = std::numeric_limits<unsigned>::max()) const { return reverseFind(literal.span8(), start); }
     WTF_EXPORT_PRIVATE size_t reverseFind(StringView, unsigned start = std::numeric_limits<unsigned>::max()) const;
 
     WTF_EXPORT_PRIVATE size_t findIgnoringASCIICase(StringView) const;
@@ -217,8 +217,8 @@ private:
     void initialize(std::span<const LChar>);
     void initialize(std::span<const UChar>);
 
-    WTF_EXPORT_PRIVATE size_t find(const LChar* match, unsigned matchLength, unsigned start) const;
-    WTF_EXPORT_PRIVATE size_t reverseFind(const LChar* match, unsigned matchLength, unsigned start) const;
+    WTF_EXPORT_PRIVATE size_t find(std::span<const LChar> match, unsigned start) const;
+    WTF_EXPORT_PRIVATE size_t reverseFind(std::span<const LChar> match, unsigned start) const;
 
     template<typename CharacterType, typename MatchedCharacterPredicate>
     StringView trim(const CharacterType*, const MatchedCharacterPredicate&) const;
@@ -408,7 +408,7 @@ inline StringView::StringView(std::span<const UChar> characters)
 
 inline StringView::StringView(const char* characters)
 {
-    initialize(std::span { reinterpret_cast<const LChar*>(characters), characters ? strlen(characters) : 0 });
+    initialize(WTF::span8(characters));
 }
 
 inline StringView::StringView(std::span<const char> characters)
@@ -652,8 +652,8 @@ inline StringView::UpconvertedCharactersWithSize<N>::UpconvertedCharactersWithSi
 inline String StringView::toString() const
 {
     if (is8Bit())
-        return String(characters8(), m_length);
-    return String(characters16(), m_length);
+        return span8();
+    return span16();
 }
 
 inline AtomString StringView::toAtomString() const
@@ -673,15 +673,15 @@ inline AtomString StringView::toExistingAtomString() const
 inline float StringView::toFloat(bool& isValid) const
 {
     if (is8Bit())
-        return charactersToFloat(characters8(), m_length, &isValid);
-    return charactersToFloat(characters16(), m_length, &isValid);
+        return charactersToFloat(span8(), &isValid);
+    return charactersToFloat(span16(), &isValid);
 }
 
 inline double StringView::toDouble(bool& isValid) const
 {
     if (is8Bit())
-        return charactersToDouble(characters8(), m_length, &isValid);
-    return charactersToDouble(characters16(), m_length, &isValid);
+        return charactersToDouble(span8(), &isValid);
+    return charactersToDouble(span16(), &isValid);
 }
 
 inline String StringView::toStringWithoutCopying() const

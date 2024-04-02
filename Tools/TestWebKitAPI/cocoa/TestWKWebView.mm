@@ -28,6 +28,7 @@
 
 #import "ClassMethodSwizzler.h"
 #import "InstanceMethodSwizzler.h"
+#import "PlatformUtilities.h"
 #import "Test.h"
 #import "TestNavigationDelegate.h"
 #import "Utilities.h"
@@ -457,6 +458,18 @@ static WebEvent *unwrap(BEKeyEntry *event)
     return result.autorelease();
 }
 
+- (NSData *)contentsAsWebArchive
+{
+    __block bool done = false;
+    __block RetainPtr<NSData> result;
+    [self createWebArchiveDataWithCompletionHandler:^(NSData *contents, NSError *error) {
+        result = contents;
+        done = true;
+    }];
+    TestWebKitAPI::Util::run(&done);
+    return result.autorelease();
+}
+
 - (NSArray<NSString *> *)tagsInBody
 {
     return [self objectByEvaluatingJavaScript:@"Array.from(document.body.getElementsByTagName('*')).map(e => e.tagName)"];
@@ -591,6 +604,20 @@ static WebEvent *unwrap(BEKeyEntry *event)
 {
     auto rect = [self elementRectFromSelector:selector];
     return CGPointMake(CGRectGetMidX(rect), CGRectGetMidY(rect));
+}
+
+- (CGImageRef)snapshotAfterScreenUpdates
+{
+    __block RetainPtr<CGImage> result;
+    __block bool done = false;
+    RetainPtr configuration = adoptNS([WKSnapshotConfiguration new]);
+    [configuration setAfterScreenUpdates:YES];
+    [self takeSnapshotWithConfiguration:configuration.get() completionHandler:^(TestWebKitAPI::Util::PlatformImage *snapshot, NSError *) {
+        result = TestWebKitAPI::Util::convertToCGImage(snapshot);
+        done = true;
+    }];
+    TestWebKitAPI::Util::run(&done);
+    return result.autorelease();
 }
 
 @end

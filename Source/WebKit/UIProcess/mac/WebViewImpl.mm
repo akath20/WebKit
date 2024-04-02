@@ -2644,7 +2644,7 @@ static String commandNameForSelector(SEL selector)
     size_t selectorNameLength = strlen(selectorName);
     if (selectorNameLength < 2 || selectorName[selectorNameLength - 1] != ':')
         return String();
-    return String(selectorName, selectorNameLength - 1);
+    return String({ selectorName, selectorNameLength - 1 });
 }
 
 bool WebViewImpl::executeSavedCommandBySelector(SEL selector)
@@ -6312,8 +6312,19 @@ void WebViewImpl::handleContextMenuTranslation(const WebCore::TranslationContext
 #endif // HAVE(TRANSLATION_UI_SERVICES) && ENABLE(CONTEXT_MENUS)
 
 #if ENABLE(UNIFIED_TEXT_REPLACEMENT) && ENABLE(CONTEXT_MENUS)
+
+bool WebViewImpl::canHandleSwapCharacters() const
+{
+    return webViewCanHandleSwapCharacters();
+}
+
 void WebViewImpl::handleContextMenuSwapCharacters(IntRect selectionBoundsInRootView)
 {
+    if (!canHandleSwapCharacters()) {
+        ASSERT_NOT_REACHED();
+        return;
+    }
+
     auto view = m_view.get();
     showSwapCharactersViewRelativeToRectOfView(selectionBoundsInRootView, view.get());
 }

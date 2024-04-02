@@ -95,6 +95,7 @@ namespace Style {
 class PseudoElementRequest;
 }
 
+enum class HitTestSource : bool;
 enum class RepaintRectCalculation : bool { Fast, Accurate };
 enum class RepaintOutlineBounds : bool { No, Yes };
 enum class RequiresFullRepaint : bool { No, Yes };
@@ -608,7 +609,6 @@ public:
     virtual FloatRect objectBoundingBox() const;
     virtual FloatRect strokeBoundingBox() const;
 
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
     // The objectBoundingBox of a SVG container is affected by the transformations applied on its children -- the container
     // bounding box is a union of all child bounding boxes, mapped through their transformation matrices.
     //
@@ -619,7 +619,6 @@ public:
     // painting, hit-testing etc. This allows to minimize the amount of re-layouts when animating transformations in SVG
     // (not using CSS Animations/Transitions / Web Animations, but e.g. SMIL <animateTransform>, JS, ...).
     virtual FloatRect objectBoundingBoxWithoutTransformations() const { return objectBoundingBox(); }
-#endif
 
     // Returns the smallest rectangle enclosing all of the painted content
     // respecting clipping, masking, filters, opacity, stroke-width and markers
@@ -782,9 +781,7 @@ public:
     void setHasReflection(bool = true);
     void setHasOutlineAutoAncestor(bool = true);
     void setPaintContainmentApplies(bool value = true) { m_stateBitfields.setFlag(StateFlag::PaintContainmentApplies, value); }
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
     void setHasSVGTransform(bool value = true) { m_stateBitfields.setFlag(StateFlag::HasSVGTransform, value); }
-#endif
 
     // Hook so that RenderTextControl can return the line height of its inner renderer.
     // For other renderers, the value is the same as lineHeight(false).
@@ -803,8 +800,8 @@ public:
 
     virtual bool nodeAtPoint(const HitTestRequest&, HitTestResult&, const HitTestLocation& locationInContainer, const LayoutPoint& accumulatedOffset, HitTestAction);
 
-    virtual Position positionForPoint(const LayoutPoint&);
-    virtual VisiblePosition positionForPoint(const LayoutPoint&, const RenderFragmentContainer*);
+    virtual Position positionForPoint(const LayoutPoint&, HitTestSource);
+    virtual VisiblePosition positionForPoint(const LayoutPoint&, HitTestSource, const RenderFragmentContainer*);
     VisiblePosition createVisiblePosition(int offset, Affinity) const;
     VisiblePosition createVisiblePosition(const Position&) const;
 

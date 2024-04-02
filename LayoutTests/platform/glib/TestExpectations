@@ -475,6 +475,11 @@ imported/w3c/web-platform-tests/quirks/line-height-in-list-item.tentative.html [
 # AXObjectCache::announce not implemented.
 accessibility/announcement-notification.html [ Skip ]
 
+accessibility/shadow-dom-hit-test.html [ Skip ]
+
+# AccessibilityUIElement::isAttributeSupported needs to be updated to handle AXSelectedRows.
+accessibility/aria-table-selection-support.html [ Skip ]
+
 # Timing out since added in https://bugs.webkit.org/show_bug.cgi?id=263715
 accessibility/focus-inside-modal.html [ Skip ]
 # Timing out since added in https://bugs.webkit.org/show_bug.cgi?id=249283.
@@ -552,6 +557,8 @@ accessibility/display-contents/tree-and-treeitems.html [ Skip ]
 
 webkit.org/b/212805 accessibility/svg-text.html [ Failure ]
 
+accessibility/combobox/mac [ Skip ]
+
 # AX support for datetime input elements needs to be completed in glib platforms.
 accessibility/datetime [ Skip ]
 
@@ -577,7 +584,7 @@ webkit.org/b/141072 accessibility/frame-disconnect-textmarker-cache-crash.html [
 
 webkit.org/b/163383 accessibility/meter-element.html [ Failure ]
 
-webkit.org/b/182107 accessibility/aria-combobox-control-owns-elements.html [ Timeout ]
+webkit.org/b/182107 accessibility/combobox/aria-combobox-control-owns-elements.html [ Timeout ]
 
 webkit.org/b/98363 [ Release ] accessibility/canvas-fallback-content-2.html [ Failure ]
 webkit.org/b/98372 accessibility/onclick-handlers.html [ Failure ]
@@ -634,7 +641,7 @@ webkit.org/b/232256 accessibility/auto-fill-crash.html [ Timeout ]
 http/tests/accessibility/focus-text-field-in-iframe.html [ Skip ]
 
 # Times out due to missing AccessibilityUIElement::linkedUIElementAtIndex() implementation.
-accessibility/combobox-linked-listbox-destroyed.html [ Skip ]
+accessibility/combobox/combobox-linked-listbox-destroyed.html [ Skip ]
 
 # Fails due to missing AccessibilityUIElement::indexInTable() implementation.
 accessibility/table-insert-second-thead.html [ Skip ]
@@ -1073,6 +1080,7 @@ webkit.org/b/213699 http/wpt/mediarecorder/MediaRecorder-AV-audio-video-dataavai
 webkit.org/b/218317 media/media-source/media-source-trackid-change.html [ Failure ]
 webkit.org/b/238201 media/media-source/media-mp4-hevc-bframes.html [ Failure ]
 webkit.org/b/270622 media/media-source/media-managedmse-noresumeafterpause.html [ Timeout ]
+webkit.org/b/271631 media/media-source/media-managedmse-stall-endofstream.html [ Failure ]
 
 # GStreamer (< 1.24) doesn't set the track's id to the container's value.
 webkit.org/b/265919 media/track/media-audio-track.html [ Failure ]
@@ -2627,6 +2635,10 @@ webgl/webgl-fail-after-context-creation-no-crash.html [ Skip ]
 # Payment Request
 imported/w3c/web-platform-tests/payment-request [ Skip ]
 imported/w3c/web-platform-tests/permissions-policy/payment-allowed-by-permissions-policy-attribute-redirect-on-load.https.sub.html [ Skip ]
+imported/w3c/web-platform-tests/permissions-policy/payment-allowed-by-permissions-policy-attribute.https.sub.html [ Skip ]
+imported/w3c/web-platform-tests/permissions-policy/payment-allowed-by-permissions-policy.https.sub.html [ Skip ]
+imported/w3c/web-platform-tests/permissions-policy/payment-default-permissions-policy.https.sub.html [ Skip ]
+imported/w3c/web-platform-tests/permissions-policy/payment-disabled-by-permissions-policy.https.sub.html [ Skip ]
 
 # WebArchive
 webarchive [ WontFix ]

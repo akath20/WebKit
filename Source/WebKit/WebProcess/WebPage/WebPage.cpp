@@ -196,7 +196,7 @@
 #include <WebCore/Editing.h>
 #include <WebCore/Editor.h>
 #include <WebCore/ElementIterator.h>
-#include <WebCore/ElementTargeting.h>
+#include <WebCore/ElementTargetingController.h>
 #include <WebCore/EventHandler.h>
 #include <WebCore/EventNames.h>
 #include <WebCore/ExceptionCode.h>
@@ -1978,7 +1978,7 @@ void WebPage::loadDataInFrame(std::span<const uint8_t> data, String&& type, Stri
         return;
     ASSERT(&mainWebFrame() != frame);
 
-    auto sharedBuffer = SharedBuffer::create(data.data(), data.size());
+    Ref sharedBuffer = SharedBuffer::create(data);
     ResourceResponse response(baseURL, type, sharedBuffer->size(), encodingName);
     SubstituteData substituteData(WTFMove(sharedBuffer), baseURL, WTFMove(response), SubstituteData::SessionHistoryVisibility::Hidden);
     frame->coreLocalFrame()->loader().load(FrameLoadRequest(*frame->coreLocalFrame(), ResourceRequest(baseURL), WTFMove(substituteData)));
@@ -2101,7 +2101,7 @@ void WebPage::loadData(LoadParameters&& loadParameters)
 
     platformDidReceiveLoadParameters(loadParameters);
 
-    auto sharedBuffer = SharedBuffer::create(loadParameters.data.data(), loadParameters.data.size());
+    Ref sharedBuffer = SharedBuffer::create(loadParameters.data);
 
     URL baseURL;
     if (loadParameters.baseURLString.isEmpty())
@@ -2126,7 +2126,7 @@ void WebPage::loadAlternateHTML(LoadParameters&& loadParameters)
     URL baseURL = loadParameters.baseURLString.isEmpty() ? aboutBlankURL() : URL { loadParameters.baseURLString };
     URL unreachableURL = loadParameters.unreachableURLString.isEmpty() ? URL() : URL { loadParameters.unreachableURLString };
     URL provisionalLoadErrorURL = loadParameters.provisionalLoadErrorURLString.isEmpty() ? URL() : URL { loadParameters.provisionalLoadErrorURLString };
-    auto sharedBuffer = SharedBuffer::create(loadParameters.data.data(), loadParameters.data.size());
+    auto sharedBuffer = SharedBuffer::create(loadParameters.data);
     m_mainFrame->coreLocalFrame()->loader().setProvisionalLoadErrorBeingHandledURL(provisionalLoadErrorURL);
 
     WebProcess::singleton().addAllowedFirstPartyForCookies(WebCore::RegistrableDomain { baseURL });
@@ -2139,7 +2139,7 @@ void WebPage::loadAlternateHTML(LoadParameters&& loadParameters)
 void WebPage::loadSimulatedRequestAndResponse(LoadParameters&& loadParameters, ResourceResponse&& simulatedResponse)
 {
     setLastNavigationWasAppInitiated(loadParameters.request.isAppInitiated());
-    auto sharedBuffer = SharedBuffer::create(loadParameters.data.data(), loadParameters.data.size());
+    auto sharedBuffer = SharedBuffer::create(loadParameters.data);
     loadDataImpl(loadParameters.navigationID, loadParameters.shouldTreatAsContinuingLoad, WTFMove(loadParameters.websitePolicies), WTFMove(sharedBuffer), WTFMove(loadParameters.request), WTFMove(simulatedResponse), URL(), loadParameters.userData, loadParameters.isNavigatingToAppBoundDomain, SubstituteData::SessionHistoryVisibility::Visible);
 }
 
@@ -2416,8 +2416,10 @@ void WebPage::setTextZoomFactor(double zoomFactor)
 double WebPage::pageZoomFactor() const
 {
 #if ENABLE(PDF_PLUGIN)
-    if (auto* pluginView = mainFramePlugIn())
+    if (auto* pluginView = mainFramePlugIn()) {
+        // Note that this maps page *scale* factor to page *zoom* factor.
         return pluginView->pageScaleFactor();
+    }
 #endif
 
     RefPtr frame = m_mainFrame->coreLocalFrame();
@@ -2430,6 +2432,7 @@ void WebPage::setPageZoomFactor(double zoomFactor)
 {
 #if ENABLE(PDF_PLUGIN)
     if (auto* pluginView = mainFramePlugIn()) {
+        // Note that this maps page *zoom* factor to page *scale* factor.
         pluginView->setPageScaleFactor(zoomFactor, std::nullopt);
         return;
     }
@@ -2492,6 +2495,11 @@ String WebPage::dumpHistoryForTesting(const String& directory)
     for (int i = begin; i <= static_cast<int>(list.forwardCount()); ++i)
         dumpHistoryItem(*list.itemAtIndex(i), 8, !i, builder, directory);
     return builder.toString();
+}
+
+String WebPage::frameTextForTestingIncludingSubframes(bool includeSubframes)
+{
+    return m_mainFrame->frameTextForTesting(includeSubframes);
 }
 
 void WebPage::clearHistory()
@@ -9022,6 +9030,15 @@ void WebPage::lastNavigationWasAppInitiated(CompletionHandler<void(bool)>&& comp
     return completionHandler(mainFrame->document()->loader()->lastNavigationWasAppInitiated());
 }
 
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+
+void WebPage::removeTextIndicatorStyleForID(const WTF::UUID& uuid)
+{
+    send(Messages::WebPageProxy::RemoveTextIndicatorStyleForID(uuid));
+}
+
+#endif
+
 #if HAVE(TRANSLATION_UI_SERVICES) && ENABLE(CONTEXT_MENUS)
 
 void WebPage::handleContextMenuTranslation(const TranslationContextMenuInfo& info)
@@ -9341,7 +9358,7 @@ void WebPage::remotePostMessage(WebCore::FrameIdentifier source, const String& s
     targetWindow->postMessageFromRemoteFrame(*globalObject, WTFMove(sourceWindow), sourceOrigin, WTFMove(targetOrigin), message);
 }
 
-void WebPage::renderTreeAsText(WebCore::FrameIdentifier frameID, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag> behavior, CompletionHandler<void(String&&)>&& completionHandler)
+void WebPage::renderTreeAsTextForTesting(WebCore::FrameIdentifier frameID, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag> behavior, CompletionHandler<void(String&&)>&& completionHandler)
 {
     RefPtr webFrame = WebProcess::singleton().webFrame(frameID);
     if (!webFrame) {
@@ -9367,23 +9384,29 @@ void WebPage::renderTreeAsText(WebCore::FrameIdentifier frameID, size_t baseInde
     completionHandler(ts.release());
 }
 
+void WebPage::frameTextForTesting(WebCore::FrameIdentifier frameID, CompletionHandler<void(String&&)>&& completionHandler)
+{
+    RefPtr webFrame = WebProcess::singleton().webFrame(frameID);
+    if (!webFrame) {
+        ASSERT_NOT_REACHED();
+        return completionHandler("Test Error - WebFrame missing in web process"_s);
+    }
+    constexpr bool includeSubframes { true };
+    completionHandler(webFrame->frameTextForTesting(includeSubframes));
+}
+
 void WebPage::requestTargetedElement(TargetedElementRequest&& request, CompletionHandler<void(Vector<WebCore::TargetedElementInfo>&&)>&& completion)
 {
-    completion(findTargetedElements(Ref { *corePage() }, WTFMove(request)));
+    RefPtr page = corePage();
+    if (!page)
+        return completion({ });
+
+    completion(page->checkedElementTargetingController()->findTargets(WTFMove(request)));
 }
 
 void WebPage::requestTextExtraction(std::optional<FloatRect>&& collectionRectInRootView, CompletionHandler<void(TextExtraction::Item&&)>&& completion)
 {
     completion(TextExtraction::extractItem(WTFMove(collectionRectInRootView), Ref { *corePage() }));
-}
-
-void WebPage::requestRenderedTextForElementSelector(String&& selector, CompletionHandler<void(Expected<String, WebCore::ExceptionCode>&&)>&& completion)
-{
-    RefPtr mainFrame = dynamicDowncast<LocalFrame>(corePage()->protectedMainFrame());
-    if (!mainFrame)
-        return completion(makeUnexpected(ExceptionCode::NotAllowedError));
-
-    completion(TextExtraction::extractRenderedText(mainFrame.releaseNonNull(), WTFMove(selector)));
 }
 
 template<typename T> void WebPage::remoteViewToRootView(WebCore::FrameIdentifier frameID, T geometry, CompletionHandler<void(T)>&& completionHandler)
@@ -9415,17 +9438,22 @@ void WebPage::remoteViewPointToRootView(FrameIdentifier frameID, FloatPoint poin
     remoteViewToRootView(frameID, point, WTFMove(completionHandler));
 }
 
-void WebPage::adjustVisibilityForTargetedElements(const Vector<std::pair<WebCore::ElementIdentifier, WebCore::ScriptExecutionContextIdentifier>>& identifiers, CompletionHandler<void(bool)>&& completion)
+void WebPage::adjustVisibilityForTargetedElements(const Vector<std::pair<ElementIdentifier, ScriptExecutionContextIdentifier>>& identifiers, CompletionHandler<void(bool)>&& completion)
 {
-    Vector<Ref<Element>> elements;
-    elements.reserveInitialCapacity(identifiers.size());
-    for (auto [elementID, documentID] : identifiers) {
-        RefPtr foundElement = Element::fromIdentifier(elementID);
-        if (!foundElement || foundElement->document().identifier() != documentID)
-            continue;
-        elements.append(foundElement.releaseNonNull());
-    }
-    completion(WebCore::adjustVisibilityForTargetedElements(elements));
+    RefPtr page = corePage();
+    completion(page && page->checkedElementTargetingController()->adjustVisibility(identifiers));
+}
+
+void WebPage::resetVisibilityAdjustmentsForTargetedElements(const Vector<std::pair<ElementIdentifier, ScriptExecutionContextIdentifier>>& identifiers, CompletionHandler<void(bool)>&& completion)
+{
+    RefPtr page = corePage();
+    completion(page && page->checkedElementTargetingController()->resetVisibilityAdjustments(identifiers));
+}
+
+void WebPage::numberOfVisibilityAdjustmentRects(CompletionHandler<void(uint64_t)>&& completion)
+{
+    RefPtr page = corePage();
+    completion(page ? page->checkedElementTargetingController()->numberOfVisibilityAdjustmentRects() : 0);
 }
 
 } // namespace WebKit

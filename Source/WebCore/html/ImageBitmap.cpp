@@ -715,7 +715,6 @@ public:
 
     void didDraw(const Image&) override { }
 
-    bool canDestroyDecodedData(const Image&) override { return true; }
     void imageFrameAvailable(const Image&, ImageAnimatingState, const IntRect* = nullptr, DecodingStatus = DecodingStatus::Invalid) override { }
     void changedInRect(const Image&, const IntRect* = nullptr) override { }
     void scheduleRenderingUpdate(const Image&) override { }
@@ -822,7 +821,7 @@ void ImageBitmap::createFromBuffer(ScriptExecutionContext& scriptExecutionContex
         return;
     }
 
-    auto sharedBuffer = SharedBuffer::create(static_cast<const char*>(arrayBuffer->data()), arrayBuffer->byteLength());
+    auto sharedBuffer = SharedBuffer::create(arrayBuffer->span());
     auto observer = ImageBitmapImageObserver::create(mimeType, expectedContentLength, sourceURL);
     auto image = BitmapImage::create(observer.ptr());
     auto result = image->setData(sharedBuffer.copyRef(), true);

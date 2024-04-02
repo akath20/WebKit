@@ -122,9 +122,9 @@
 
 // FIXME: We should rationalize these with the values in ViewGestureController.
 // For now, we'll leave them differing as they do in PDFPlugin.
-static constexpr CGFloat minimumZoomScale = 0.2;
-static constexpr CGFloat maximumZoomScale = 6.0;
-static constexpr CGFloat zoomIncrement = 1.18920;
+static constexpr double minimumZoomScale = 0.2;
+static constexpr double maximumZoomScale = 6.0;
+static constexpr double zoomIncrement = 1.18920;
 
 namespace WebKit {
 using namespace WebCore;
@@ -360,7 +360,7 @@ void UnifiedPDFPlugin::setNeedsRepaintInDocumentRect(OptionSet<RepaintRequiremen
     auto contentsRect = convertUp(CoordinateSpace::PDFDocumentLayout, CoordinateSpace::Contents, rectInDocumentCoordinates);
     if (repaintRequirements.contains(RepaintRequirement::PDFContent)) {
         if (RefPtr asyncRenderer = asyncRendererIfExists())
-            asyncRenderer->updateTilesForPaintingRect(m_scaleFactor, contentsRect);
+            asyncRenderer->pdfContentChangedInRect(m_scaleFactor, contentsRect);
     }
 
     RefPtr { m_contentsLayer }->setNeedsDisplayInRect(contentsRect);
@@ -979,7 +979,7 @@ std::optional<PDFDocumentLayout::PageIndex> UnifiedPDFPlugin::pageIndexWithHover
     return pageIndex;
 }
 
-float UnifiedPDFPlugin::scaleForActualSize() const
+double UnifiedPDFPlugin::scaleForActualSize() const
 {
 #if PLATFORM(MAC)
     if (!m_frame || !m_frame->coreLocalFrame())
@@ -1009,7 +1009,7 @@ float UnifiedPDFPlugin::scaleForActualSize() const
     return 1;
 }
 
-float UnifiedPDFPlugin::scaleForFitToView() const
+double UnifiedPDFPlugin::scaleForFitToView() const
 {
     auto contentsSize = m_documentLayout.scaledContentsSize();
     auto availableSize = FloatSize { availableContentsRect().size() };
@@ -1021,22 +1021,46 @@ float UnifiedPDFPlugin::scaleForFitToView() const
     return aspectRatioFitRect.width() / size().width();
 }
 
-float UnifiedPDFPlugin::initialScale() const
+double UnifiedPDFPlugin::initialScale() const
 {
     auto actualSizeScale = scaleForActualSize();
     auto fitToViewScale = scaleForFitToView();
     auto initialScale = std::max(actualSizeScale, fitToViewScale);
     // Only let actual size scaling scale down, not up.
-    initialScale = std::min(initialScale, 1.0f);
+    initialScale = std::min(initialScale, 1.0);
     return initialScale;
 }
 
-CGFloat UnifiedPDFPlugin::scaleFactor() const
+void UnifiedPDFPlugin::computeNormalizationFactor()
+{
+    auto actualSizeScale = scaleForActualSize();
+    m_scaleNormalizationFactor = 1.0 / actualSizeScale;
+}
+
+double UnifiedPDFPlugin::fromNormalizedScaleFactor(double normalizedScale) const
+{
+    return normalizedScale / m_scaleNormalizationFactor;
+}
+
+double UnifiedPDFPlugin::toNormalizedScaleFactor(double scale) const
+{
+    return scale * m_scaleNormalizationFactor;
+}
+
+double UnifiedPDFPlugin::scaleFactor() const
+{
+    // The return value is mapped to `pageScaleFactor`, so we want a value of 1 to match "actual size".
+    return toNormalizedScaleFactor(m_scaleFactor);
+}
+
+// This is a GraphicsLayerClient function. The return value is used to compute layer contentsScale, so we don't
+// want to use the normalized scale factor.
+float UnifiedPDFPlugin::pageScaleFactor() const
 {
     return m_scaleFactor;
 }
 
-float UnifiedPDFPlugin::contentScaleFactor() const
+double UnifiedPDFPlugin::contentScaleFactor() const
 {
     return m_scaleFactor * m_documentLayout.scale();
 }
@@ -1114,6 +1138,8 @@ void UnifiedPDFPlugin::setScaleFactor(double scale, std::optional<WebCore::IntPo
     scheduleRenderingUpdate();
 
     m_view->pluginScaleFactorDidChange();
+
+    LOG_WITH_STREAM(PDF, stream << "UnifiedPDFPlugin::setScaleFactor " << scale << " - new scale factor " << m_scaleFactor << " (exposed as normalized scale factor " << scaleFactor() << ") normalization factor " << m_scaleNormalizationFactor << " layout scale " << m_documentLayout.scale());
 }
 
 void UnifiedPDFPlugin::setPageScaleFactor(double scale, std::optional<WebCore::IntPoint> origin)
@@ -1136,9 +1162,11 @@ void UnifiedPDFPlugin::setPageScaleFactor(double scale, std::optional<WebCore::I
     }
 
     if (scale != 1.0)
-        m_documentLayout.setShouldUpdateAutoSizeScale(PDFDocumentLayout::ShouldUpdateAutoSizeScale::No);
+        m_shouldUpdateAutoSizeScale = ShouldUpdateAutoSizeScale::No;
 
-    setScaleFactor(scale, origin);
+    auto internalScale = fromNormalizedScaleFactor(scale);
+    LOG_WITH_STREAM(PDF, stream << "UnifiedPDFPlugin::setPageScaleFactor " << scale << " mapped to " << internalScale);
+    setScaleFactor(internalScale, origin);
 }
 
 bool UnifiedPDFPlugin::geometryDidChange(const IntSize& pluginSize, const AffineTransform& pluginToRootViewTransform)
@@ -1185,27 +1213,60 @@ IntRect UnifiedPDFPlugin::availableContentsRect() const
 void UnifiedPDFPlugin::updateLayout(AdjustScaleAfterLayout shouldAdjustScale)
 {
     auto layoutSize = availableContentsRect().size();
-    m_documentLayout.updateLayout(layoutSize);
+    auto autoSizeMode = m_didLayoutWithValidDocument ? m_shouldUpdateAutoSizeScale : ShouldUpdateAutoSizeScale::Yes;
+
+    auto scrollAnchoringInfo = scrollAnchoringForCurrentScrollPosition(shouldAdjustScale == AdjustScaleAfterLayout::Yes || autoSizeMode == ShouldUpdateAutoSizeScale::Yes);
+
+    m_documentLayout.updateLayout(layoutSize, autoSizeMode);
     updateScrollbars();
 
     // Do a second layout pass if the first one changed scrollbars.
     auto newLayoutSize = availableContentsRect().size();
     if (layoutSize != newLayoutSize) {
-        m_documentLayout.updateLayout(newLayoutSize);
+        m_documentLayout.updateLayout(newLayoutSize, autoSizeMode);
         updateScrollbars();
     }
+
+    m_didLayoutWithValidDocument = m_documentLayout.hasPDFDocument();
 
     updateLayerHierarchy();
     updateLayerPositions();
     updateScrollingExtents();
+    computeNormalizationFactor();
 
     if (shouldAdjustScale == AdjustScaleAfterLayout::Yes && m_view) {
         auto initialScaleFactor = initialScale();
         LOG_WITH_STREAM(PDF, stream << "UnifiedPDFPlugin::updateLayout - on first layout, chose scale for actual size " << initialScaleFactor);
         setScaleFactor(initialScaleFactor);
 
-        m_documentLayout.setShouldUpdateAutoSizeScale(PDFDocumentLayout::ShouldUpdateAutoSizeScale::No);
+        m_shouldUpdateAutoSizeScale = ShouldUpdateAutoSizeScale::No;
     }
+
+    LOG_WITH_STREAM(PDF, stream << "UnifiedPDFPlugin::updateLayout - scale " << m_scaleFactor << " normalization factor " << m_scaleNormalizationFactor << " layout scale " << m_documentLayout.scale());
+
+    if (scrollAnchoringInfo)
+        restoreScrollPositionWithInfo(*scrollAnchoringInfo);
+}
+
+auto UnifiedPDFPlugin::scrollAnchoringForCurrentScrollPosition(bool preserveScrollPosition) const -> std::optional<ScrollAnchoringInfo>
+{
+    if (!preserveScrollPosition)
+        return { };
+
+    if (!m_documentLayout.hasLaidOutPDFDocument())
+        return { };
+
+    auto topLeftInDocumentSpace = convertDown(CoordinateSpace::Plugin, CoordinateSpace::PDFDocumentLayout, FloatPoint { });
+    auto [pageIndex, pointInPDFPageSpace] = m_documentLayout.pageIndexAndPagePointForDocumentYOffset(topLeftInDocumentSpace.y());
+
+    LOG_WITH_STREAM(PDF, stream << "UnifiedPDFPlugin::scrollAnchoringForCurrentScrollPosition - point " << pointInPDFPageSpace << " in page " << pageIndex);
+
+    return ScrollAnchoringInfo { pageIndex, pointInPDFPageSpace };
+}
+
+void UnifiedPDFPlugin::restoreScrollPositionWithInfo(const ScrollAnchoringInfo& info)
+{
+    scrollToPointInPage(info.pagePoint, info.pageIndex);
 }
 
 FloatSize UnifiedPDFPlugin::centeringOffset() const
@@ -1220,7 +1281,7 @@ FloatSize UnifiedPDFPlugin::centeringOffset() const
         std::floor(std::max<float>(availableSize.height() - documentPresentationSize.height(), 0) / 2)
     };
 
-    offset.scale(1.0f / m_scaleFactor);
+    offset.scale(1 / m_scaleFactor);
     return offset;
 }
 
@@ -2455,7 +2516,7 @@ PDFContextMenuItem UnifiedPDFPlugin::contextMenuItem(ContextMenuItemTag tag, boo
             auto currentDisplayMode = contextMenuItemTagFromDisplayMode(m_documentLayout.displayMode());
             state = currentDisplayMode == tag;
         } else if (tag == ContextMenuItemTag::AutoSize)
-            state = m_documentLayout.shouldUpdateAutoSizeScale() == PDFDocumentLayout::ShouldUpdateAutoSizeScale::Yes;
+            state = m_shouldUpdateAutoSizeScale == ShouldUpdateAutoSizeScale::Yes;
 
         return { titleForContextMenuItemTag(tag), state, enumToUnderlyingType(tag), ContextMenuItemEnablement::Enabled, hasAction ? ContextMenuItemHasAction::Yes : ContextMenuItemHasAction::No, ContextMenuItemIsSeparator::No };
     }
@@ -2519,12 +2580,12 @@ void UnifiedPDFPlugin::performContextMenuAction(ContextMenuItemTag tag, const In
 {
     switch (tag) {
     case ContextMenuItemTag::AutoSize:
-        if (m_documentLayout.shouldUpdateAutoSizeScale() == PDFDocumentLayout::ShouldUpdateAutoSizeScale::No) {
-            m_documentLayout.setShouldUpdateAutoSizeScale(PDFDocumentLayout::ShouldUpdateAutoSizeScale::Yes);
+        if (m_shouldUpdateAutoSizeScale == ShouldUpdateAutoSizeScale::No) {
+            m_shouldUpdateAutoSizeScale = ShouldUpdateAutoSizeScale::Yes;
             setScaleFactor(1.0);
             updateLayout();
         } else
-            m_documentLayout.setShouldUpdateAutoSizeScale(PDFDocumentLayout::ShouldUpdateAutoSizeScale::No);
+            m_shouldUpdateAutoSizeScale = ShouldUpdateAutoSizeScale::No;
         break;
     case ContextMenuItemTag::WebSearch:
         performWebSearch(selectionString());
@@ -2973,14 +3034,14 @@ unsigned UnifiedPDFPlugin::countFindMatches(const String& target, WebCore::FindO
     if (!target.length())
         return 0;
 
-    NSStringCompareOptions nsOptions = options.contains(WebCore::CaseInsensitive) ? NSCaseInsensitiveSearch : 0;
+    NSStringCompareOptions nsOptions = options.contains(FindOption::CaseInsensitive) ? NSCaseInsensitiveSearch : 0;
     return [[m_pdfDocument findString:target withOptions:nsOptions] count];
 }
 
 static NSStringCompareOptions compareOptionsForFindOptions(WebCore::FindOptions options)
 {
-    bool searchForward = !options.contains(WebCore::Backwards);
-    bool isCaseSensitive = !options.contains(WebCore::CaseInsensitive);
+    bool searchForward = !options.contains(FindOption::Backwards);
+    bool isCaseSensitive = !options.contains(FindOption::CaseInsensitive);
 
     NSStringCompareOptions compareOptions = 0;
     if (!searchForward)
@@ -3000,14 +3061,14 @@ bool UnifiedPDFPlugin::findString(const String& target, WebCore::FindOptions opt
         return false;
     }
 
-    if (options.contains(WebCore::DoNotSetSelection)) {
+    if (options.contains(FindOption::DoNotSetSelection)) {
         // If the max was zero, any result means we exceeded the max, so we can skip computing the actual count.
         // FIXME: How can always returning true without searching if passed a max of 0 be right?
         // Even if it is right, why not put that special case inside countFindMatches instead of here?
         return !target.isEmpty() && (!maxMatchCount || countFindMatches(target, options, maxMatchCount));
     }
 
-    bool wrapSearch = options.contains(WebCore::WrapAround);
+    bool wrapSearch = options.contains(FindOption::WrapAround);
     auto compareOptions = compareOptionsForFindOptions(options);
 
     auto nextMatchForString = [&]() -> RetainPtr<PDFSelection> {
@@ -3280,13 +3341,13 @@ id UnifiedPDFPlugin::accessibilityObject() const
 
 void UnifiedPDFPlugin::zoomIn()
 {
-    m_documentLayout.setShouldUpdateAutoSizeScale(PDFDocumentLayout::ShouldUpdateAutoSizeScale::No);
+    m_shouldUpdateAutoSizeScale = ShouldUpdateAutoSizeScale::No;
     setScaleFactor(std::clamp(m_scaleFactor * zoomIncrement, minimumZoomScale, maximumZoomScale));
 }
 
 void UnifiedPDFPlugin::zoomOut()
 {
-    m_documentLayout.setShouldUpdateAutoSizeScale(PDFDocumentLayout::ShouldUpdateAutoSizeScale::No);
+    m_shouldUpdateAutoSizeScale = ShouldUpdateAutoSizeScale::No;
     setScaleFactor(std::clamp(m_scaleFactor / zoomIncrement, minimumZoomScale, maximumZoomScale));
 }
 

@@ -27,7 +27,6 @@
 #include "config.h"
 #include "RenderSVGImage.h"
 
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
 #include "AXObjectCache.h"
 #include "BitmapImage.h"
 #include "DocumentInlines.h"
@@ -260,8 +259,7 @@ bool RenderSVGImage::nodeAtPoint(const HitTestRequest& request, HitTestResult& r
         return false;
 
     PointerEventsHitRules hitRules(PointerEventsHitRules::HitTestingTargetType::SVGImage, request, style().pointerEvents());
-    bool isVisible = (style().usedVisibility() == Visibility::Visible);
-    if (isVisible || !hitRules.requireVisible) {
+    if (isVisibleToHitTesting(style(), request) || !hitRules.requireVisible) {
         if (hitRules.canHitFill) {
             if (m_objectBoundingBox.contains(localPoint)) {
                 updateHitTestResult(result, locationInContainer.point() - toLayoutSize(adjustedLocation));
@@ -417,5 +415,3 @@ void RenderSVGImage::applyTransform(TransformationMatrix& transform, const Rende
 }
 
 } // namespace WebCore
-
-#endif // ENABLE(LAYER_BASED_SVG_ENGINE)

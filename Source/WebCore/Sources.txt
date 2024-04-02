@@ -534,9 +534,9 @@ accessibility/AXObjectCache.cpp
 accessibility/AXRemoteFrame.cpp
 accessibility/AXTextMarker.cpp
 accessibility/AXTextRun.cpp
-accessibility/AccessibilityARIAGrid.cpp
 accessibility/AccessibilityARIAGridCell.cpp
 accessibility/AccessibilityARIAGridRow.cpp
+accessibility/AccessibilityARIATable.cpp
 accessibility/AccessibilityAttachment.cpp
 accessibility/AccessibilityImageMapLink.cpp
 accessibility/AccessibilityLabel.cpp
@@ -939,6 +939,7 @@ css/SVGCSSComputedStyleDeclaration.cpp
 css/SelectorChecker.cpp
 css/SelectorFilter.cpp
 css/ShorthandSerializer.cpp
+css/StyleAttributeMutationScope.cpp
 css/StyleColor.cpp
 css/StyleMedia.cpp
 css/StyleProperties.cpp
@@ -1929,7 +1930,7 @@ page/DeviceController.cpp
 page/DiagnosticLoggingKeys.cpp
 page/DisabledAdaptations.cpp
 page/DragController.cpp
-page/ElementTargeting.cpp
+page/ElementTargetingController.cpp
 page/EventHandler.cpp
 page/EventSource.cpp
 page/FocusController.cpp
@@ -2246,6 +2247,7 @@ platform/graphics/AlphaPremultiplication.cpp
 platform/graphics/AnimationFrameRate.cpp
 platform/graphics/BifurcatedGraphicsContext.cpp
 platform/graphics/BitmapImage.cpp
+platform/graphics/BitmapImageSource.cpp
 platform/graphics/ByteArrayPixelBuffer.cpp
 platform/graphics/CachedSubimage.cpp
 platform/graphics/CodecUtilities.cpp
@@ -2317,6 +2319,8 @@ platform/graphics/ImageBufferBackend.cpp
 platform/graphics/ImageBufferPipe.cpp
 platform/graphics/ImageDecoder.cpp
 platform/graphics/ImageFrame.cpp
+platform/graphics/ImageFrameAnimator.cpp
+platform/graphics/ImageFrameWorkQueue.cpp
 platform/graphics/ImagePaintingOptions.cpp
 platform/graphics/ImageSource.cpp
 platform/graphics/InbandGenericCue.cpp
@@ -2337,6 +2341,7 @@ platform/graphics/Model.cpp
 platform/graphics/NamedImageGeneratedImage.cpp
 platform/graphics/NullImageBufferBackend.cpp
 platform/graphics/NativeImage.cpp
+platform/graphics/NativeImageSource.cpp
 platform/graphics/Path.cpp
 platform/graphics/PathImpl.cpp
 platform/graphics/PathSegment.cpp

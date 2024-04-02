@@ -300,7 +300,9 @@ bool WebExtensionContext::unload(NSError **outError)
     writeStateToStorage();
 
     unloadBackgroundWebView();
+
     removeInjectedContent();
+    m_registeredScriptsMap.clear();
 
     invalidateStorage();
     unloadDeclarativeNetRequestState();
@@ -516,9 +518,23 @@ void WebExtensionContext::setInspectable(bool inspectable)
         entry.key.cocoaView().get().inspectable = inspectable;
 }
 
-const WebExtensionContext::InjectedContentVector& WebExtensionContext::injectedContents()
+void WebExtensionContext::setUnsupportedAPIs(HashSet<String>&& unsupported)
 {
-    return m_extension->staticInjectedContents();
+    ASSERT(!isLoaded());
+    if (isLoaded())
+        return;
+
+    m_unsupportedAPIs = WTFMove(unsupported);
+}
+
+WebExtensionContext::InjectedContentVector WebExtensionContext::injectedContents() const
+{
+    InjectedContentVector result = m_extension->staticInjectedContents();
+
+    for (auto& entry : m_registeredScriptsMap)
+        result.append(entry.value->injectedContent());
+
+    return result;
 }
 
 bool WebExtensionContext::hasInjectedContentForURL(const URL& url)
@@ -877,11 +893,6 @@ bool WebExtensionContext::removeGrantedPermissions(PermissionsSet& permissionsTo
 
 bool WebExtensionContext::removeGrantedPermissionMatchPatterns(MatchPatternSet& matchPatternsToRemove, EqualityOnly equalityOnly)
 {
-    if (!removePermissionMatchPatterns(m_grantedPermissionMatchPatterns, matchPatternsToRemove, equalityOnly, m_nextGrantedPermissionMatchPatternsExpirationDate, _WKWebExtensionContextGrantedPermissionMatchPatternsWereRemovedNotification))
-        return false;
-
-    removeInjectedContent(matchPatternsToRemove);
-
     // Clear activeTab permissions if the patterns match.
     for (Ref tab : openTabs()) {
         auto temporaryPattern = tab->temporaryPermissionMatchPattern();
@@ -893,6 +904,11 @@ bool WebExtensionContext::removeGrantedPermissionMatchPatterns(MatchPatternSet& 
                 tab->setTemporaryPermissionMatchPattern(nullptr);
         }
     }
+
+    if (!removePermissionMatchPatterns(m_grantedPermissionMatchPatterns, matchPatternsToRemove, equalityOnly, m_nextGrantedPermissionMatchPatternsExpirationDate, _WKWebExtensionContextGrantedPermissionMatchPatternsWereRemovedNotification))
+        return false;
+
+    removeInjectedContent(matchPatternsToRemove);
 
     return true;
 }
@@ -1638,7 +1654,7 @@ void WebExtensionContext::setPermissionState(PermissionState state, const URL& u
     ASSERT(!url.isEmpty());
     ASSERT(!expirationDate.isNaN());
 
-    auto pattern = WebExtensionMatchPattern::getOrCreate(url.protocol().toString(), url.host().toString(), url.path().toString());
+    RefPtr pattern = WebExtensionMatchPattern::getOrCreate(url);
     if (!pattern)
         return;
 
@@ -2813,18 +2829,27 @@ void WebExtensionContext::userGesturePerformed(WebExtensionTab& tab)
     if (currentURL.isEmpty())
         return;
 
-    auto pattern = tab.temporaryPermissionMatchPattern();
-
-    // Nothing to do if the tab already has a pattern matching the current URL.
-    if (pattern && pattern->matchesURL(currentURL))
+    switch (permissionState(currentURL, &tab)) {
+    case PermissionState::DeniedImplicitly:
+    case PermissionState::DeniedExplicitly:
+    case PermissionState::GrantedImplicitly:
+    case PermissionState::GrantedExplicitly:
+        // The extension already has permission, or permission was denied, so there is nothing to do.
         return;
+
+    case PermissionState::Unknown:
+    case PermissionState::RequestedImplicitly:
+    case PermissionState::RequestedExplicitly:
+        // The temporary permission should be granted.
+        break;
+    }
 
     // A pattern should not exist, since it should be cleared in clearUserGesture
     // on any navigation between different hosts.
-    ASSERT(!pattern);
+    ASSERT(!tab.temporaryPermissionMatchPattern());
 
-    // Grant the tab a temporary permission to access to a pattern matching the current URL's scheme and host for all paths.
-    pattern = WebExtensionMatchPattern::getOrCreate(currentURL.protocol().toStringWithoutCopying(), currentURL.host().toStringWithoutCopying(), "/*"_s);
+    // Grant the tab a temporary permission to access to a pattern matching the current URL.
+    RefPtr pattern = WebExtensionMatchPattern::getOrCreate(currentURL);
     tab.setTemporaryPermissionMatchPattern(pattern.copyRef());
 
     // Fire the updated event now that the extension has permission to see the URL and title.
@@ -4137,7 +4162,7 @@ static NSString *computeStringHashForContentBlockerRules(NSString *rules)
     sha1.computeHash(digest);
 
     auto hashAsCString = SHA1::hexDigest(digest);
-    auto hashAsString = String::fromUTF8(hashAsCString);
+    auto hashAsString = String::fromUTF8(hashAsCString.span());
     return [hashAsString stringByAppendingString:[NSString stringWithFormat:@"-%zu", currentDeclarativeNetRequestRuleTranslatorVersion]];
 }
 

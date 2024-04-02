@@ -69,8 +69,11 @@ private:
     void setAllowsPictureInPicturePlayback(bool) final { }
     bool isExternalPlaybackActive() const final { return false; }
     AVPlayerViewController *avPlayerViewController() const final { return nullptr; }
+    void setupCaptionsLayer(CALayer *parent, const FloatSize&) final;
+    LMPlayableViewController *playableViewController() final;
 
     WKSLinearMediaPlayer *linearMediaPlayer() const;
+    void ensurePlayableViewController();
 
     RetainPtr<LMPlayableViewController> m_playerViewController;
 };

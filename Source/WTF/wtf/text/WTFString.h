@@ -39,12 +39,12 @@ namespace WTF {
 
 // Declarations of string operations
 
-WTF_EXPORT_PRIVATE double charactersToDouble(const LChar*, size_t, bool* ok = nullptr);
-WTF_EXPORT_PRIVATE double charactersToDouble(const UChar*, size_t, bool* ok = nullptr);
-WTF_EXPORT_PRIVATE float charactersToFloat(const LChar*, size_t, bool* ok = nullptr);
-WTF_EXPORT_PRIVATE float charactersToFloat(const UChar*, size_t, bool* ok = nullptr);
-WTF_EXPORT_PRIVATE float charactersToFloat(const LChar*, size_t, size_t& parsedLength);
-WTF_EXPORT_PRIVATE float charactersToFloat(const UChar*, size_t, size_t& parsedLength);
+WTF_EXPORT_PRIVATE double charactersToDouble(std::span<const LChar>, bool* ok = nullptr);
+WTF_EXPORT_PRIVATE double charactersToDouble(std::span<const UChar>, bool* ok = nullptr);
+WTF_EXPORT_PRIVATE float charactersToFloat(std::span<const LChar>, bool* ok = nullptr);
+WTF_EXPORT_PRIVATE float charactersToFloat(std::span<const UChar>, bool* ok = nullptr);
+WTF_EXPORT_PRIVATE float charactersToFloat(std::span<const LChar>, size_t& parsedLength);
+WTF_EXPORT_PRIVATE float charactersToFloat(std::span<const UChar>, size_t& parsedLength);
 
 template<bool isSpecialCharacter(UChar), typename CharacterType> bool containsOnly(const CharacterType*, size_t);
 
@@ -57,14 +57,11 @@ public:
     String() = default;
 
     // Construct a string with UTF-16 data.
-    WTF_EXPORT_PRIVATE String(const UChar* characters, unsigned length);
-    ALWAYS_INLINE String(std::span<const UChar> characters) : String(characters.data(), characters.size()) { }
+    WTF_EXPORT_PRIVATE String(std::span<const UChar> characters);
 
     // Construct a string with Latin-1 data.
-    WTF_EXPORT_PRIVATE String(const LChar* characters, unsigned length);
-    WTF_EXPORT_PRIVATE String(const char* characters, unsigned length);
-    ALWAYS_INLINE String(std::span<const LChar> characters) : String(characters.data(), characters.size()) { }
-    ALWAYS_INLINE String(std::span<const char> characters) : String(characters.data(), characters.size()) { }
+    WTF_EXPORT_PRIVATE String(std::span<const LChar> characters);
+    WTF_EXPORT_PRIVATE String(std::span<const char> characters);
     ALWAYS_INLINE static String fromLatin1(const char* characters) { return String { characters }; }
 
     // Construct a string referencing an existing StringImpl.
@@ -255,33 +252,27 @@ public:
 
 #if OS(WINDOWS)
     String(const wchar_t* characters, unsigned length)
-        : String(ucharFrom(characters), length) { }
+        : String({ ucharFrom(characters), length }) { }
 
     String(const wchar_t* characters)
-        : String(characters, characters ? wcslen(characters) : 0) { }
+        : String({ ucharFrom(characters), static_cast<size_t>(characters ? wcslen(characters) : 0) }) { }
 
     WTF_EXPORT_PRIVATE Vector<wchar_t> wideCharacters() const;
 #endif
 
-    WTF_EXPORT_PRIVATE static String make8Bit(const UChar*, unsigned);
+    WTF_EXPORT_PRIVATE static String make8Bit(std::span<const UChar>);
     WTF_EXPORT_PRIVATE void convertTo16Bit();
 
     // String::fromUTF8 will return a null string if the input data contains invalid UTF-8 sequences.
-    WTF_EXPORT_PRIVATE static String fromUTF8(const LChar*, size_t);
+    WTF_EXPORT_PRIVATE static String fromUTF8(std::span<const LChar>);
     WTF_EXPORT_PRIVATE static String fromUTF8(const LChar*);
-    static String fromUTF8(const char* characters, size_t length) { return fromUTF8(reinterpret_cast<const LChar*>(characters), length); }
+    static String fromUTF8(std::span<const char> characters) { return fromUTF8(std::span { reinterpret_cast<const LChar*>(characters.data()), characters.size() }); }
     static String fromUTF8(const char* string) { return fromUTF8(reinterpret_cast<const LChar*>(string)); }
-    WTF_EXPORT_PRIVATE static String fromUTF8(const CString&);
-    static String fromUTF8(const std::span<const LChar>& characters);
-    static String fromUTF8(const Vector<LChar>& characters) { return fromUTF8(characters.span()); }
-    static String fromUTF8ReplacingInvalidSequences(const LChar*, size_t);
+    static String fromUTF8ReplacingInvalidSequences(std::span<const LChar>);
 
     // Tries to convert the passed in string to UTF-8, but will fall back to Latin-1 if the string is not valid UTF-8.
     WTF_EXPORT_PRIVATE static String fromUTF8WithLatin1Fallback(std::span<const LChar>);
-
-    // FIXME: Update all call sites to pass a span and remove these 2 overloads.
-    static String fromUTF8WithLatin1Fallback(const LChar* characters, size_t length) { return fromUTF8WithLatin1Fallback(std::span { characters, length }); }
-    static String fromUTF8WithLatin1Fallback(const char* characters, size_t length) { return fromUTF8WithLatin1Fallback(std::span { reinterpret_cast<const LChar*>(characters), length }); }
+    static String fromUTF8WithLatin1Fallback(std::span<const char> characters) { return fromUTF8WithLatin1Fallback({ reinterpret_cast<const LChar*>(characters.data()), characters.size() }); }
 
     WTF_EXPORT_PRIVATE static String fromCodePoint(char32_t codePoint);
 
@@ -380,7 +371,7 @@ template<> struct VectorTraits<String> : VectorTraitsBase<false, void> {
 template<> struct IntegerToStringConversionTrait<String> {
     using ReturnType = String;
     using AdditionalArgumentType = void;
-    static String flush(LChar* characters, unsigned length, void*) { return { characters, length }; }
+    static String flush(const LChar* characters, unsigned length, void*) { return std::span { characters, length }; }
 };
 
 #ifdef __OBJC__
@@ -539,13 +530,6 @@ inline bool codePointCompareLessThan(const String& a, const String& b)
     return codePointCompare(a.impl(), b.impl()) < 0;
 }
 
-inline String String::fromUTF8(const std::span<const LChar>& characters)
-{
-    if (characters.empty())
-        return emptyString();
-    return fromUTF8(characters.data(), characters.size());
-}
-
 template<typename Predicate>
 String String::removeCharacters(const Predicate& findMatch) const
 {
@@ -581,7 +565,7 @@ inline String operator"" _str(const char* characters, size_t)
 
 inline String operator"" _str(const UChar* characters, size_t length)
 {
-    return String(characters, length);
+    return String({ characters, length });
 }
 
 } // inline StringLiterals

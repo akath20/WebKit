@@ -267,7 +267,7 @@ size_t PDFPluginBase::copyDataAtPosition(void* buffer, uint64_t sourcePosition, 
     return count;
 }
 
-const uint8_t* PDFPluginBase::dataPtrForRange(uint64_t sourcePosition, size_t count, CheckValidRanges checkValidRanges) const
+std::span<const uint8_t> PDFPluginBase::dataPtrForRange(uint64_t sourcePosition, size_t count, CheckValidRanges checkValidRanges) const
 {
     Locker locker { m_streamedDataLock };
 
@@ -289,9 +289,9 @@ const uint8_t* PDFPluginBase::dataPtrForRange(uint64_t sourcePosition, size_t co
     };
 
     if (!haveValidData(checkValidRanges))
-        return nullptr;
+        return { };
 
-    return CFDataGetBytePtr(m_data.get()) + sourcePosition;
+    return { CFDataGetBytePtr(m_data.get()) + sourcePosition, count };
 }
 
 bool PDFPluginBase::getByteRanges(CFMutableArrayRef dataBuffersArray, const CFRange* ranges, size_t count) const
@@ -1088,7 +1088,7 @@ DictionaryPopupInfo PDFPluginBase::dictionaryPopupInfoForSelection(PDFSelection 
     NSAttributedString *nsAttributedString = selection.attributedString;
     RetainPtr scaledNSAttributedString = adoptNS([[NSMutableAttributedString alloc] initWithString:[nsAttributedString string]]);
     NSFontManager *fontManager = [NSFontManager sharedFontManager];
-    CGFloat scaleFactor = contentScaleFactor();
+    auto scaleFactor = contentScaleFactor();
 
     [nsAttributedString enumerateAttributesInRange:NSMakeRange(0, [nsAttributedString length]) options:0 usingBlock:^(NSDictionary *attributes, NSRange range, BOOL *stop) {
         RetainPtr<NSMutableDictionary> scaledAttributes = adoptNS([attributes mutableCopy]);

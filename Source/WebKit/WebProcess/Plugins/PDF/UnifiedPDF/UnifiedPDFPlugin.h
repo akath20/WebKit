@@ -197,9 +197,9 @@ private:
     PDFDataDetectorOverlayController& dataDetectorOverlayController() { return *m_dataDetectorOverlayController; }
 #endif
 
-    float scaleForActualSize() const;
-    float initialScale() const;
-    float scaleForFitToView() const;
+    double scaleForActualSize() const;
+    double initialScale() const;
+    double scaleForFitToView() const;
 
     /*
         Unified PDF Plugin scales, in depth order:
@@ -218,8 +218,14 @@ private:
 
         - "contentScaleFactor": the scale between the plugin and document space (scaleFactor * document layout scale)
     */
-    CGFloat scaleFactor() const override;
-    float contentScaleFactor() const final;
+    double scaleFactor() const override;
+    double contentScaleFactor() const final;
+
+    // Scale normalization is used to map the internal "scale factor" to the exposed scaleFactor()/setPageScaleFactor()
+    // so that scale factor 1 shows at "Actual Size".
+    void computeNormalizationFactor();
+    double fromNormalizedScaleFactor(double) const;
+    double toNormalizedScaleFactor(double) const;
 
     void didBeginMagnificationGesture() override;
     void didEndMagnificationGesture() override;
@@ -367,7 +373,7 @@ private:
     // GraphicsLayerClient
     void notifyFlushRequired(const WebCore::GraphicsLayer*) override;
     void paintContents(const WebCore::GraphicsLayer*, WebCore::GraphicsContext&, const WebCore::FloatRect&, OptionSet<WebCore::GraphicsLayerPaintBehavior>) override;
-    float pageScaleFactor() const override { return scaleFactor(); }
+    float pageScaleFactor() const override;
     bool layerNeedsPlatformContext(const WebCore::GraphicsLayer*) const override { return true; }
     void tiledBackingUsageChanged(const WebCore::GraphicsLayer*, bool /*usingTiledBacking*/) override;
     std::optional<float> customContentsScale(const WebCore::GraphicsLayer*) const override;
@@ -429,6 +435,14 @@ private:
     void determineCurrentlySnappedPage();
 
     WebCore::FloatSize centeringOffset() const;
+
+    struct ScrollAnchoringInfo {
+        PDFDocumentLayout::PageIndex pageIndex { 0 };
+        WebCore::FloatPoint pagePoint;
+    };
+
+    std::optional<ScrollAnchoringInfo> scrollAnchoringForCurrentScrollPosition(bool preserveScrollPosition) const;
+    void restoreScrollPositionWithInfo(const ScrollAnchoringInfo&);
 
     // HUD Actions.
 #if ENABLE(PDF_HUD)
@@ -502,13 +516,18 @@ private:
 
     WebCore::ScrollingNodeID m_scrollingNodeID;
 
-    float m_scaleFactor { 1 };
-    bool m_inMagnificationGesture { false };
+    double m_scaleFactor { 1 };
+    double m_scaleNormalizationFactor { 1 };
+
     std::optional<WebCore::IntPoint> m_magnificationOriginInContentCoordinates;
     std::optional<WebCore::IntPoint> m_magnificationOriginInPluginCoordinates;
 
+    bool m_inMagnificationGesture { false };
     bool m_didAttachScrollingTreeNode { false };
     bool m_didScrollToFragment { false };
+    bool m_didLayoutWithValidDocument { false };
+
+    ShouldUpdateAutoSizeScale m_shouldUpdateAutoSizeScale { ShouldUpdateAutoSizeScale::Yes };
 
     AnnotationTrackingState m_annotationTrackingState;
 

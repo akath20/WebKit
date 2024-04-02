@@ -2156,14 +2156,14 @@ window.UIHelper = class UIHelper {
         });
     }
 
-    static requestRenderedTextForSelector(selector)
+    static requestRenderedTextForFrontmostTarget(x, y)
     {
         if (!this.isWebKit2())
             return Promise.resolve();
 
         return new Promise(resolve => {
             testRunner.runUIScript(`(() => {
-                uiController.requestRenderedTextForSelector("${selector}", result => uiController.uiScriptComplete(result));
+                uiController.requestRenderedTextForFrontmostTarget(${x}, ${y}, result => uiController.uiScriptComplete(result));
             })()`, resolve);
         });
     }
@@ -2171,6 +2171,12 @@ window.UIHelper = class UIHelper {
     static adjustVisibilityForFrontmostTarget(x, y) {
         if (!this.isWebKit2())
             return Promise.resolve();
+
+        if (x instanceof HTMLElement) {
+            const point = this.midPointOfRect(x.getBoundingClientRect());
+            x = point.x;
+            y = point.y;
+        }
 
         return new Promise(resolve => {
             testRunner.runUIScript(`(() => {

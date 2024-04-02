@@ -45,6 +45,7 @@
 #import <WebCore/DictionaryLookup.h>
 #import <WebCore/DocumentInlines.h>
 #import <WebCore/DocumentMarkerController.h>
+#import <WebCore/DragImage.h>
 #import <WebCore/Editing.h>
 #import <WebCore/Editor.h>
 #import <WebCore/EventHandler.h>
@@ -111,9 +112,16 @@ void WebPage::platformInitialize(const WebPageCreationParameters& parameters)
     platformInitializeAccessibility();
 
 #if ENABLE(MEDIA_STREAM)
-    if (auto* captureManager = WebProcess::singleton().supplement<UserMediaCaptureManager>())
-        captureManager->setupCaptureProcesses(parameters.shouldCaptureAudioInUIProcess, parameters.shouldCaptureAudioInGPUProcess, parameters.shouldCaptureVideoInUIProcess, parameters.shouldCaptureVideoInGPUProcess, parameters.shouldCaptureDisplayInUIProcess, parameters.shouldCaptureDisplayInGPUProcess, m_page->settings().webRTCRemoteVideoFrameEnabled());
-#endif
+    if (auto* captureManager = WebProcess::singleton().supplement<UserMediaCaptureManager>()) {
+        captureManager->setupCaptureProcesses(parameters.shouldCaptureAudioInUIProcess, parameters.shouldCaptureAudioInGPUProcess, parameters.shouldCaptureVideoInUIProcess, parameters.shouldCaptureVideoInGPUProcess, parameters.shouldCaptureDisplayInUIProcess, parameters.shouldCaptureDisplayInGPUProcess,
+#if ENABLE(WEB_RTC)
+            m_page->settings().webRTCRemoteVideoFrameEnabled()
+#else
+            false
+#endif // ENABLE(WEB_RTC)
+        );
+    }
+#endif // ENABLE(MEDIA_STREAM)
 #if USE(LIBWEBRTC)
     LibWebRTCCodecs::setCallbacks(m_page->settings().webRTCPlatformCodecsInGPUProcessEnabled(), m_page->settings().webRTCRemoteVideoFrameEnabled());
     LibWebRTCCodecs::setWebRTCMediaPipelineAdditionalLoggingEnabled(m_page->settings().webRTCMediaPipelineAdditionalLoggingEnabled());
@@ -301,6 +309,21 @@ DictionaryPopupInfo WebPage::dictionaryPopupInfoForRange(LocalFrame& frame, cons
     return dictionaryPopupInfo;
 }
 
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+void WebPage::getTextIndicatorForID(const WTF::UUID& uuid, CompletionHandler<void(std::optional<WebCore::TextIndicatorData>&&)>&& completionHandler)
+{
+    m_unifiedTextReplacementController->getTextIndicatorForID(uuid, WTFMove(completionHandler));
+}
+
+void WebPage::updateTextIndicatorStyleVisibilityForID(const WTF::UUID uuid, bool visible, CompletionHandler<void()>&& completionHandler)
+{
+    // FIXME: Turn on/off the visibility.
+
+    completionHandler();
+}
+
+#endif // ENABLE(UNIFIED_TEXT_REPLACEMENT)
+
 void WebPage::insertDictatedTextAsync(const String& text, const EditingRange& replacementEditingRange, const Vector<WebCore::DictationAlternative>& dictationAlternativeLocations, InsertTextOptions&& options)
 {
     RefPtr frame = m_page->checkedFocusController()->focusedOrMainFrame();
@@ -360,7 +383,7 @@ void WebPage::addDictationAlternative(const String& text, DictationContext conte
 
     auto targetOffset = characterCount(*searchRange);
     targetOffset -= std::min<uint64_t>(targetOffset, text.length());
-    auto matchRange = findClosestPlainText(*searchRange, text, { Backwards, DoNotRevealSelection }, targetOffset);
+    auto matchRange = findClosestPlainText(*searchRange, text, { FindOption::Backwards, FindOption::DoNotRevealSelection }, targetOffset);
     if (matchRange.collapsed()) {
         completion(false);
         return;

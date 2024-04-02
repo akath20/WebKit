@@ -1335,7 +1335,6 @@ CSSUnprefixedBackdropFilterEnabled:
   humanReadableDescription: "Enable unprefixed backdrop-filter CSS property"
   defaultValue:
     WebKitLegacy:
-      "ENABLE(UNPREFIXED_BACKDROP_FILTER)": true
       default: false
     WebKit:
       "ENABLE(UNPREFIXED_BACKDROP_FILTER)": true
@@ -3548,7 +3547,6 @@ LayerBasedSVGEngineEnabled:
   status: unstable
   humanReadableName: "Layer-based SVG Engine (LBSE)"
   humanReadableDescription: "Enable next-generation layer-based SVG Engine (LBSE)"
-  condition: ENABLE(LAYER_BASED_SVG_ENGINE)
   webcoreOnChange: layerBasedSVGEngineEnabledChanged
   defaultValue:
     WebCore:
@@ -3657,7 +3655,7 @@ LegacyOverflowScrollingTouchEnabled:
 
 LinearMediaPlayerEnabled:
   type: bool
-  status: unstable
+  status: internal
   category: media
   humanReadableName: "Linear Media Player"
   humanReadableDescription: "Enable LinearMediaPlayer for fullscreen video"
@@ -3666,7 +3664,7 @@ LinearMediaPlayerEnabled:
     WebKitLegacy:
       default: false
     WebKit:
-      default: false
+      default: true
     WebCore:
       default: false
 
@@ -6478,6 +6476,20 @@ TextExtractionEnabled:
   defaultValue:
     WebKit:
       default: true
+      
+TextIndicatorStylingEnabled:
+  type: bool
+  status: internal
+  humanReadableName: "Text Indicator Styling"
+  humanReadableDescription: "Text Indicator Styling"
+  condition: ENABLE(UNIFIED_TEXT_REPLACEMENT)
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
 
 TextInteractionEnabled:
   type: bool
@@ -7065,20 +7077,6 @@ ViewTransitionsEnabled:
       default: true
     WebCore:
       default: true
-
-ViewTransitionsUAStylesEnabled:
-  type: bool
-  category: animation
-  status: testable
-  humanReadableName: "View Transitions user-agent styles"
-  humanReadableDescription: "Enable the View Transitions API user-agent styles"
-  defaultValue:
-    WebKitLegacy:
-      default: false
-    WebKit:
-      default: false
-    WebCore:
-      default: false
 
 VisibleDebugOverlayRegions:
   type: uint32_t
@@ -7887,48 +7885,48 @@ WebXRAugmentedRealityModuleEnabled:
 
 WebXREnabled:
   type: bool
-  status: testable
+  status: stable
   category: dom
   humanReadableName: "WebXR Device API"
   humanReadableDescription: "Adds support for accessing virtual reality (VR) and augmented reality (AR) devices, including sensors and head-mounted displays, on the Web"
   condition: ENABLE(WEBXR)
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 WebXRGamepadsModuleEnabled:
   type: bool
-  status: testable
+  status: stable
   category: dom
   humanReadableName: "WebXR Gamepads Module"
   humanReadableDescription: "Adds support for the WebXR Gamepads Module"
   condition: ENABLE(WEBXR)
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 WebXRHandInputModuleEnabled:
   type: bool
-  status: testable
+  status: stable
   category: dom
   humanReadableName: "WebXR Hand Input Module"
   humanReadableDescription: "Adds support for the Hands Input Module for WebXR"
   condition: ENABLE(WEBXR_HANDS)
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 WheelEventGesturesBecomeNonBlocking:
   type: bool

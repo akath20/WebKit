@@ -1106,7 +1106,7 @@ float Internals::imageFrameDurationAtIndex(HTMLImageElement& element, unsigned i
 void Internals::setImageFrameDecodingDuration(HTMLImageElement& element, float duration)
 {
     if (auto* bitmapImage = bitmapImageFromImageElement(element))
-        bitmapImage->setFrameDecodingDurationForTesting(Seconds { duration });
+        bitmapImage->setMinimumDecodingDurationForTesting(Seconds { duration });
 }
 
 void Internals::resetImageAnimation(HTMLImageElement& element)
@@ -1181,7 +1181,7 @@ AtomString Internals::imageLastDecodingOptions(HTMLImageElement& element)
     if (!bitmapImage)
         return { };
 
-    auto options = bitmapImage->lastDecodingOptions();
+    auto options = bitmapImage->currentFrameDecodingOptions();
     StringBuilder builder;
     builder.append("{ decodingMode : ");
     builder.append(options.decodingMode() == DecodingMode::Asynchronous ? "Asynchronous" : "Synchronous");
@@ -2929,17 +2929,17 @@ static ExceptionOr<FindOptions> parseFindOptions(const Vector<String>& optionLis
 {
     const struct {
         ASCIILiteral name;
-        FindOptionFlag value;
+        FindOption value;
     } flagList[] = {
-        { "CaseInsensitive"_s, CaseInsensitive },
-        { "AtWordStarts"_s, AtWordStarts },
-        { "TreatMedialCapitalAsWordStart"_s, TreatMedialCapitalAsWordStart },
-        { "Backwards"_s, Backwards },
-        { "WrapAround"_s, WrapAround },
-        { "StartInSelection"_s, StartInSelection },
-        { "DoNotRevealSelection"_s, DoNotRevealSelection },
-        { "AtWordEnds"_s, AtWordEnds },
-        { "DoNotTraverseFlatTree"_s, DoNotTraverseFlatTree },
+        { "CaseInsensitive"_s, FindOption::CaseInsensitive },
+        { "AtWordStarts"_s, FindOption::AtWordStarts },
+        { "TreatMedialCapitalAsWordStart"_s, FindOption::TreatMedialCapitalAsWordStart },
+        { "Backwards"_s, FindOption::Backwards },
+        { "WrapAround"_s, FindOption::WrapAround },
+        { "StartInSelection"_s, FindOption::StartInSelection },
+        { "DoNotRevealSelection"_s, FindOption::DoNotRevealSelection },
+        { "AtWordEnds"_s, FindOption::AtWordEnds },
+        { "DoNotTraverseFlatTree"_s, FindOption::DoNotTraverseFlatTree },
     };
     FindOptions result;
     for (auto& option : optionList) {
@@ -7349,7 +7349,7 @@ AccessibilityObject* Internals::axObjectForElement(Element& element) const
     WebCore::AXObjectCache::enableAccessibility();
 
     auto* cache = document->axObjectCache();
-    return cache ? cache->getOrCreate(&element) : nullptr;
+    return cache ? cache->getOrCreate(element) : nullptr;
 }
 
 String Internals::getComputedLabel(Element& element) const

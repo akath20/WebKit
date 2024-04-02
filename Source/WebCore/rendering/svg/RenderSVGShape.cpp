@@ -30,7 +30,6 @@
 #include "config.h"
 #include "RenderSVGShape.h"
 
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
 #include "FloatPoint.h"
 #include "FloatQuad.h"
 #include "GraphicsContext.h"
@@ -305,8 +304,7 @@ bool RenderSVGShape::nodeAtPoint(const HitTestRequest& request, HitTestResult& r
         return false;
 
     PointerEventsHitRules hitRules(PointerEventsHitRules::HitTestingTargetType::SVGPath, request, style().usedPointerEvents());
-    bool isVisible = (style().usedVisibility() == Visibility::Visible);
-    if (isVisible || !hitRules.requireVisible) {
+    if (isVisibleToHitTesting(style(), request) || !hitRules.requireVisible) {
         const SVGRenderStyle& svgStyle = style().svgStyle();
         WindRule fillRule = svgStyle.fillRule();
         if (request.svgClipContent())
@@ -430,5 +428,3 @@ void RenderSVGShape::applyTransform(TransformationMatrix& transform, const Rende
 }
 
 }
-
-#endif // ENABLE(LAYER_BASED_SVG_ENGINE)

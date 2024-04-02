@@ -83,6 +83,7 @@ public:
     virtual void doAfterNextStablePresentationUpdate(JSValueRef callback) { doAfterPresentationUpdate(callback); }
     virtual void ensurePositionInformationIsUpToDateAt(long, long, JSValueRef callback) { doAsyncTask(callback); }
     virtual void doAfterVisibleContentRectUpdate(JSValueRef callback) { doAsyncTask(callback); }
+    virtual void doAfterNextVisibleContentRectAndStablePresentationUpdate(JSValueRef callback) { doAsyncTask(callback); }
 
     virtual void doAfterDoubleTapDelay(JSValueRef callback) { doAsyncTask(callback); }
 
@@ -415,9 +416,9 @@ public:
 
     // Text Extraction
     virtual void requestTextExtraction(JSValueRef, TextExtractionOptions*) { notImplemented(); }
-    virtual void requestRenderedTextForSelector(JSStringRef, JSValueRef) { notImplemented(); }
 
     // Element Targeting
+    virtual void requestRenderedTextForFrontmostTarget(int, int, JSValueRef) { notImplemented(); }
     virtual void adjustVisibilityForFrontmostTarget(int, int, JSValueRef) { notImplemented(); }
 
 protected:

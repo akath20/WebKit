@@ -65,6 +65,7 @@
 #include "HTMLTextAreaElement.h"
 #include "HTMLTextFormControlElement.h"
 #include "HTMLVideoElement.h"
+#include "HitTestSource.h"
 #include "KeyboardEvent.h"
 #include "LocalFrame.h"
 #include "LocalFrameView.h"
@@ -137,7 +138,7 @@ AccessibilityObject* AccessibilityNodeObject::firstChild() const
     if (!cache)
         return nullptr;
 
-    auto* axCurrentChild = cache->getOrCreate(currentChild);
+    auto* axCurrentChild = cache->getOrCreate(*currentChild);
     while (!axCurrentChild && currentChild) {
         currentChild = currentChild->nextSibling();
         axCurrentChild = cache->getOrCreate(currentChild);
@@ -155,7 +156,7 @@ AccessibilityObject* AccessibilityNodeObject::lastChild() const
         return nullptr;
 
     auto objectCache = axObjectCache();
-    return objectCache ? objectCache->getOrCreate(lastChild) : nullptr;
+    return objectCache ? objectCache->getOrCreate(*lastChild) : nullptr;
 }
 
 AccessibilityObject* AccessibilityNodeObject::previousSibling() const
@@ -168,7 +169,7 @@ AccessibilityObject* AccessibilityNodeObject::previousSibling() const
         return nullptr;
 
     auto objectCache = axObjectCache();
-    return objectCache ? objectCache->getOrCreate(previousSibling) : nullptr;
+    return objectCache ? objectCache->getOrCreate(*previousSibling) : nullptr;
 }
 
 AccessibilityObject* AccessibilityNodeObject::nextSibling() const
@@ -181,7 +182,7 @@ AccessibilityObject* AccessibilityNodeObject::nextSibling() const
         return nullptr;
 
     auto objectCache = axObjectCache();
-    return objectCache ? objectCache->getOrCreate(nextSibling) : nullptr;
+    return objectCache ? objectCache->getOrCreate(*nextSibling) : nullptr;
 }
 
 AccessibilityObject* AccessibilityNodeObject::parentObjectIfExists() const
@@ -209,7 +210,7 @@ AccessibilityObject* AccessibilityNodeObject::parentObject() const
         return nullptr;
 
     if (AXObjectCache* cache = axObjectCache())
-        return cache->getOrCreate(parentObj);
+        return cache->getOrCreate(*parentObj);
 
     return nullptr;
 }
@@ -228,7 +229,7 @@ LayoutRect AccessibilityNodeObject::checkboxOrRadioRect() const
     auto selfRect = boundingBoxRect();
     for (auto& label : labels) {
         if (label->renderer()) {
-            if (auto* axLabel = cache->getOrCreate(label.ptr()))
+            if (auto* axLabel = cache->getOrCreate(label.get()))
                 selfRect.unite(axLabel->elementRect());
         }
     }
@@ -583,7 +584,7 @@ void AccessibilityNodeObject::addChildren()
         return;
 
     for (auto* child = node->firstChild(); child; child = child->nextSibling())
-        addChild(objectCache->getOrCreate(child));
+        addChild(objectCache->getOrCreate(*child));
 
     updateOwnedChildren();
 }
@@ -658,7 +659,7 @@ bool AccessibilityNodeObject::computeAccessibilityIsIgnored() const
             return true;
 
         // Whitespace only text elements should be ignored when they have no renderer.
-        if (stringValue().containsOnly<deprecatedIsSpaceOrNewline>())
+        if (stringValue().containsOnly<isUnicodeWhitespace>())
             return true;
     }
 
@@ -1544,7 +1545,7 @@ VisiblePositionRange AccessibilityNodeObject::visiblePositionRangeForLine(unsign
 
     // iterate over the lines
     // FIXME: This is wrong when lineNumber is lineCount+1, because nextLinePosition takes you to the last offset of the last line.
-    VisiblePosition position = renderView->positionForPoint(IntPoint(), nullptr);
+    VisiblePosition position = renderView->positionForPoint(IntPoint(), HitTestSource::User, nullptr);
     while (--lineCount) {
         auto previousLinePosition = position;
         position = nextLinePosition(position, 0);
@@ -1668,7 +1669,7 @@ AccessibilityObject* AccessibilityNodeObject::menuButtonForMenu() const
 
     if (menuItem) {
         // ARIA just has generic menu items. AppKit needs to know if this is a top level items like MenuBarButton or MenuBarItem
-        AccessibilityObject* menuItemAX = cache->getOrCreate(menuItem);
+        AccessibilityObject* menuItemAX = cache->getOrCreate(*menuItem);
         if (menuItemAX && menuItemAX->isMenuButton())
             return menuItemAX;
     }
@@ -1687,7 +1688,7 @@ AccessibilityObject* AccessibilityNodeObject::captionForFigure() const
     Node* node = this->node();
     for (Node* child = node->firstChild(); child; child = child->nextSibling()) {
         if (child->hasTagName(figcaptionTag))
-            return cache->getOrCreate(child);
+            return cache->getOrCreate(*child);
     }
     return nullptr;
 }
@@ -1753,7 +1754,7 @@ String AccessibilityNodeObject::textAsLabelFor(const AccessibilityObject& labele
             appendNameToStringBuilder(builder, child->textUnderElement());
         }
         if (builder.length())
-            return builder.toString().trim(deprecatedIsSpaceOrNewline).simplifyWhiteSpace(isHTMLSpaceButNotLineBreak);
+            return builder.toString().trim(isUnicodeWhitespace).simplifyWhiteSpace(isHTMLSpaceButNotLineBreak);
     }
 
     String text = this->text();
@@ -1924,7 +1925,7 @@ void AccessibilityNodeObject::visibleText(Vector<AccessibilityText>& textOrder) 
         return;
 
     if (dependsOnTextUnderElement()) {
-        AccessibilityTextUnderElementMode mode;
+        TextUnderElementMode mode;
 
         // Headings often include links as direct children. Those links need to be included in text under element.
         if (isHeading())
@@ -2124,7 +2125,7 @@ String AccessibilityNodeObject::helpText() const
 
         // Only take help text from an ancestor element if its a group or an unknown role. If help was
         // added to those kinds of elements, it is likely it was meant for a child element.
-        if (auto* axAncestor = cache->getOrCreate(ancestor)) {
+        if (auto* axAncestor = cache->getOrCreate(*ancestor)) {
             if (!axAncestor->isGroup() && axAncestor->roleValue() != AccessibilityRole::Unknown)
                 break;
         }
@@ -2190,10 +2191,10 @@ void AccessibilityNodeObject::setIsExpanded(bool expand)
 
 // When building the textUnderElement for an object, determine whether or not
 // we should include the inner text of this given descendant object or skip it.
-static bool shouldUseAccessibilityObjectInnerText(AccessibilityObject* obj, AccessibilityTextUnderElementMode mode)
+static bool shouldUseAccessibilityObjectInnerText(AccessibilityObject* obj, TextUnderElementMode mode)
 {
     // Do not use any heuristic if we are explicitly asking to include all the children.
-    if (mode.childrenInclusion == AccessibilityTextUnderElementMode::TextUnderElementModeIncludeAllChildren)
+    if (mode.childrenInclusion == TextUnderElementMode::Children::IncludeAllChildren)
         return true;
 
     // Consider this hypothetical example:
@@ -2214,7 +2215,7 @@ static bool shouldUseAccessibilityObjectInnerText(AccessibilityObject* obj, Acce
     // containers with lots of children.
 
     // ARIA states that certain elements are not allowed to expose their children content for name calculation.
-    if (mode.childrenInclusion == AccessibilityTextUnderElementMode::TextUnderElementModeIncludeNameFromContentsChildren
+    if (mode.childrenInclusion == TextUnderElementMode::Children::IncludeNameFromContentsChildren
         && !obj->accessibleNameDerivesFromContent())
         return false;
 
@@ -2258,7 +2259,7 @@ static void appendNameToStringBuilder(StringBuilder& builder, String&& text)
     builder.append(WTFMove(text));
 }
 
-String AccessibilityNodeObject::textUnderElement(AccessibilityTextUnderElementMode mode) const
+String AccessibilityNodeObject::textUnderElement(TextUnderElementMode mode) const
 {
     Node* node = this->node();
     if (RefPtr text = dynamicDowncast<Text>(node))
@@ -2271,9 +2272,17 @@ String AccessibilityNodeObject::textUnderElement(AccessibilityTextUnderElementMo
     // The Accname specification states that if the current node is hidden, and not directly
     // referenced by aria-labelledby or aria-describedby, and is not a host language text
     // alternative, the empty string should be returned.
-    if (isDOMHidden() && !isAriaVisible && !is<HTMLLabelElement>(node) && (node && !ancestorsOfType<HTMLCanvasElement>(*node).first())) {
+    if (mode.considerHiddenState && isDOMHidden() && !isAriaVisible && !is<HTMLLabelElement>(node) && (node && !ancestorsOfType<HTMLCanvasElement>(*node).first())) {
         if (labelForObjects().isEmpty() && descriptionForObjects().isEmpty())
             return { };
+
+        // This object is a hidden label or description for another object, so ignore hidden states for our
+        // subtree text under element traversals too (https://w3c.github.io/accname/#comp_labelledby).
+        //
+        // "The result of LabelledBy Recursion in combination with Hidden Not Referenced means that user
+        // agents MUST include all nodes in the subtree as part of the accessible name or accessible
+        // description, when the node referenced by aria-labelledby or aria-describedby is hidden."
+        mode.considerHiddenState = false;
     }
 
     StringBuilder builder;
@@ -2281,7 +2290,7 @@ String AccessibilityNodeObject::textUnderElement(AccessibilityTextUnderElementMo
         if (mode.ignoredChildNode && child->node() == mode.ignoredChildNode)
             continue;
 
-        bool shouldDeriveNameFromAuthor = (mode.childrenInclusion == AccessibilityTextUnderElementMode::TextUnderElementModeIncludeNameFromContentsChildren && !child->accessibleNameDerivesFromContent());
+        bool shouldDeriveNameFromAuthor = (mode.childrenInclusion == TextUnderElementMode::Children::IncludeNameFromContentsChildren && !child->accessibleNameDerivesFromContent());
         if (shouldDeriveNameFromAuthor) {
             appendNameToStringBuilder(builder, accessibleNameForNode(child->node()));
             continue;
@@ -2322,7 +2331,7 @@ String AccessibilityNodeObject::textUnderElement(AccessibilityTextUnderElementMo
             appendNameToStringBuilder(builder, WTFMove(childText));
     }
 
-    return builder.toString().trim(deprecatedIsSpaceOrNewline).simplifyWhiteSpace(isHTMLSpaceButNotLineBreak);
+    return builder.toString().trim(isUnicodeWhitespace).simplifyWhiteSpace(isHTMLSpaceButNotLineBreak);
 }
 
 String AccessibilityNodeObject::title() const
@@ -2371,7 +2380,7 @@ String AccessibilityNodeObject::title() const
     if (isLink())
         return textUnderElement();
     if (isHeading())
-        return textUnderElement(AccessibilityTextUnderElementMode(AccessibilityTextUnderElementMode::TextUnderElementModeSkipIgnoredChildren, true));
+        return textUnderElement(TextUnderElementMode(TextUnderElementMode::Children::SkipIgnoredChildren, true));
 
     return { };
 }
@@ -2494,6 +2503,7 @@ SRGBA<uint8_t> AccessibilityNodeObject::colorValue() const
 // ARIA Implementer's Guide.
 static String accessibleNameForNode(Node* node, Node* labelledbyNode)
 {
+    // FIXME: We should just change this function to just take a reference since we ASSERT(node) and deref without a nullptr check.
     ASSERT(node);
 
     auto* element = dynamicDowncast<Element>(node);
@@ -2508,7 +2518,7 @@ static String accessibleNameForNode(Node* node, Node* labelledbyNode)
     // If the node can be turned into an AX object, we can use standard name computation rules.
     // If however, the node cannot (because there's no renderer e.g.) fallback to using the basic text underneath.
     auto* cache = node->document().axObjectCache();
-    RefPtr axObject = cache ? cache->getOrCreate(node) : nullptr;
+    RefPtr axObject = cache ? cache->getOrCreate(*node) : nullptr;
     if (axObject) {
         String valueDescription = axObject->valueDescription();
         if (!valueDescription.isEmpty())
@@ -2555,9 +2565,9 @@ static String accessibleNameForNode(Node* node, Node* labelledbyNode)
     String text;
     if (axObject) {
         if (axObject->accessibleNameDerivesFromContent())
-            text = axObject->textUnderElement(AccessibilityTextUnderElementMode(AccessibilityTextUnderElementMode::TextUnderElementModeIncludeNameFromContentsChildren, true, labelledbyNode));
+            text = axObject->textUnderElement(TextUnderElementMode(TextUnderElementMode::Children::IncludeNameFromContentsChildren, true, labelledbyNode));
     } else
-        text = (element ? element->innerText() : node->textContent()).simplifyWhiteSpace(deprecatedIsSpaceOrNewline);
+        text = (element ? element->innerText() : node->textContent()).simplifyWhiteSpace(isUnicodeWhitespace);
 
     if (!text.isEmpty())
         return text;
@@ -2596,7 +2606,7 @@ String AccessibilityNodeObject::accessibilityDescriptionForChildren() const
         if (!is<Element>(child))
             continue;
 
-        if (AccessibilityObject* axObject = cache->getOrCreate(child)) {
+        if (AccessibilityObject* axObject = cache->getOrCreate(*child)) {
             String description = axObject->ariaLabeledByAttribute();
             if (description.isEmpty())
                 description = accessibleNameForNode(child);

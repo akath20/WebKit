@@ -60,7 +60,7 @@ void SharedBufferChunkReader::setSeparator(const Vector<char>& separator)
 void SharedBufferChunkReader::setSeparator(const char* separator)
 {
     m_separator.clear();
-    m_separator.append(std::span { separator, strlen(separator) });
+    m_separator.append(span(separator));
 }
 
 bool SharedBufferChunkReader::nextChunk(Vector<uint8_t>& chunk, bool includeSeparator)
@@ -112,7 +112,7 @@ String SharedBufferChunkReader::nextChunkAsUTF8StringWithLatin1Fallback(bool inc
     if (!nextChunk(data, includeSeparator))
         return String();
 
-    return data.size() ? String::fromUTF8WithLatin1Fallback(data.data(), data.size()) : emptyString();
+    return data.size() ? String::fromUTF8WithLatin1Fallback(data.span()) : emptyString();
 }
 
 size_t SharedBufferChunkReader::peek(Vector<uint8_t>& data, size_t requestedSize)

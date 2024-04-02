@@ -755,6 +755,7 @@ void HTMLMediaElement::unregisterWithDocument(Document& document)
 
 void HTMLMediaElement::didMoveToNewDocument(Document& oldDocument, Document& newDocument)
 {
+    ActiveDOMObject::didMoveToNewDocument(newDocument);
     ALWAYS_LOG(LOGIDENTIFIER);
 
     ASSERT_WITH_SECURITY_IMPLICATION(&document() == &newDocument);
@@ -762,6 +763,13 @@ void HTMLMediaElement::didMoveToNewDocument(Document& oldDocument, Document& new
         oldDocument.decrementLoadEventDelayCount();
         newDocument.incrementLoadEventDelayCount();
     }
+
+    if (RefPtr audioTracks = m_audioTracks)
+        audioTracks->didMoveToNewDocument(newDocument);
+    if (RefPtr textTracks = m_textTracks)
+        textTracks->didMoveToNewDocument(newDocument);
+    if (RefPtr videoTracks = m_videoTracks)
+        videoTracks->didMoveToNewDocument(newDocument);
 
     unregisterWithDocument(oldDocument);
     registerWithDocument(newDocument);
@@ -2321,10 +2329,8 @@ void HTMLMediaElement::textTrackModeChanged(TextTrack& track)
     if (RefPtr textTracks = m_textTracks; textTracks && textTracks->contains(track))
         textTracks->scheduleChangeEvent();
 
-#if ENABLE(AVF_CAPTIONS)
     if (track.trackType() == TextTrack::TrackElement && m_player)
         RefPtr { m_player }->notifyTrackModeChanged();
-#endif
 }
 
 void HTMLMediaElement::textTrackKindChanged(TextTrack& track)
@@ -8252,7 +8258,7 @@ bool HTMLMediaElement::ensureMediaControls()
         return true;
 
     auto mediaControlsScripts = RenderTheme::singleton().mediaControlsScripts();
-    if (mediaControlsScripts.isEmpty())
+    if (mediaControlsScripts.isEmpty() || isSuspended())
         return false;
 
     INFO_LOG(LOGIDENTIFIER);
@@ -8530,6 +8536,7 @@ bool HTMLMediaElement::canProduceAudio() const
 
 bool HTMLMediaElement::isSuspended() const
 {
+    ASSERT(Node::scriptExecutionContext() == ActiveDOMObject::scriptExecutionContext());
     return document().activeDOMObjectsAreSuspended() || document().activeDOMObjectsAreStopped();
 }
 
@@ -9066,7 +9073,7 @@ bool HTMLMediaElement::isVisibleInViewport() const
 
 void HTMLMediaElement::schedulePlaybackControlsManagerUpdate()
 {
-    if (RefPtr page = document().page())
+    if (RefPtrAllowingPartiallyDestroyed<Page> page = document().page())
         page->schedulePlaybackControlsManagerUpdate();
 }
 

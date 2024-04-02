@@ -107,7 +107,6 @@ public:
     virtual bool isAccessibilitySVGRoot() const { return false; }
     bool isAccessibilityTableInstance() const override { return false; }
     virtual bool isAccessibilityTableColumnInstance() const { return false; }
-    bool isAccessibilityARIAGridInstance() const override { return false; }
     bool isAccessibilityARIAGridRowInstance() const override { return false; }
     bool isAccessibilityARIAGridCellInstance() const override { return false; }
     virtual bool isAccessibilityLabelInstance() const { return false; }
@@ -386,7 +385,7 @@ public:
     bool isARIAStaticText() const { return ariaRoleAttribute() == AccessibilityRole::StaticText; }
     String stringValue() const override { return { }; }
     bool dependsOnTextUnderElement() const;
-    String textUnderElement(AccessibilityTextUnderElementMode = AccessibilityTextUnderElementMode()) const override { return { }; }
+    String textUnderElement(TextUnderElementMode = TextUnderElementMode()) const override { return { }; }
     String text() const override { return { }; }
     unsigned textLength() const final;
 #if ENABLE(AX_THREAD_TEXT_APIS)

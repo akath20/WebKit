@@ -111,6 +111,7 @@
 #import <WebCore/HandleUserInputEventResult.h>
 #import <WebCore/HistoryItem.h>
 #import <WebCore/HitTestResult.h>
+#import <WebCore/HitTestSource.h>
 #import <WebCore/Image.h>
 #import <WebCore/ImageOverlay.h>
 #import <WebCore/InputMode.h>
@@ -215,7 +216,7 @@ static void adjustCandidateAutocorrectionInFrame(const String& correction, Local
     if (!referenceRange)
         return;
 
-    auto correctedRange = findPlainText(*referenceRange, correction, { Backwards });
+    auto correctedRange = findPlainText(*referenceRange, correction, { FindOption::Backwards });
     if (correctedRange.collapsed())
         return;
 
@@ -2777,7 +2778,7 @@ bool WebPage::applyAutocorrectionInternal(const String& correction, const String
                 textForRange = emptyString();
                 range = makeSimpleRange(position);
             } else if (auto searchRange = rangeExpandedAroundPositionByCharacters(position, characterCount)) {
-                if (auto foundRange = findPlainText(*searchRange, originalTextWithFoldedQuoteMarks, { DoNotSetSelection, DoNotRevealSelection }); !foundRange.collapsed()) {
+                if (auto foundRange = findPlainText(*searchRange, originalTextWithFoldedQuoteMarks, { FindOption::DoNotSetSelection, FindOption::DoNotRevealSelection }); !foundRange.collapsed()) {
                     textForRange = plainTextForContext(foundRange);
                     range = foundRange;
                 }
@@ -3279,7 +3280,7 @@ static void selectionPositionInformation(WebPage& page, const InteractionInforma
     }
 #if PLATFORM(MACCATALYST)
     bool isInsideFixedPosition;
-    VisiblePosition caretPosition(renderer->positionForPoint(request.point, nullptr));
+    VisiblePosition caretPosition(renderer->positionForPoint(request.point, HitTestSource::User, nullptr));
     info.caretRect = caretPosition.absoluteCaretBounds(&isInsideFixedPosition);
 #endif
 }
@@ -4870,7 +4871,7 @@ void WebPage::removeTextPlaceholder(const ElementContext& placeholder, Completio
 {
     if (auto element = elementForContext(placeholder)) {
         if (RefPtr frame = element->document().frame())
-            frame->editor().removeTextPlaceholder(checkedDowncast<TextPlaceholderElement>(*element));
+            frame->editor().removeTextPlaceholder(downcast<TextPlaceholderElement>(*element));
     }
     completionHandler();
 }

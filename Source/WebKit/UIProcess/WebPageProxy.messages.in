@@ -522,6 +522,10 @@ messages -> WebPageProxy {
     StoreAppHighlight(struct WebCore::AppHighlight info)
 #endif
 
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+    RemoveTextIndicatorStyleForID(WTF::UUID uuid)
+#endif
+
 #if ENABLE(SPEECH_SYNTHESIS)
     SpeechSynthesisVoiceList() -> (Vector<WebKit::WebSpeechSynthesisVoice> voiceList) Synchronous
     SpeechSynthesisSpeak(String text, String lang, float volume, float rate, float pitch, MonotonicTime startTime, String voiceURI, String voiceName, String voiceLang, bool localService, bool defaultVoice) -> ()
@@ -629,7 +633,8 @@ messages -> WebPageProxy {
 
     FocusRemoteFrame(WebCore::FrameIdentifier frameID)
     PostMessageToRemote(WebCore::FrameIdentifier source, String sourceOrigin, WebCore::FrameIdentifier target, std::optional<WebCore::SecurityOriginData> targetOrigin, struct WebCore::MessageWithMessagePorts message)
-    RenderTreeAsText(WebCore::FrameIdentifier identifier, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag> behavior) -> (String renderTreeDump) Synchronous
+    RenderTreeAsTextForTesting(WebCore::FrameIdentifier identifier, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag> behavior) -> (String renderTreeDump) Synchronous
+    FrameTextForTesting(WebCore::FrameIdentifier frameID) -> (String text) Synchronous
     BindRemoteAccessibilityFrames(int processIdentifier, WebCore::FrameIdentifier frameID, std::span<const uint8_t> dataToken) -> (std::span<const uint8_t> token, int processIdentifier) Synchronous
     UpdateRemoteFrameAccessibilityOffset(WebCore::FrameIdentifier frameID, WebCore::IntPoint offset)
 }

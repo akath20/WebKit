@@ -185,14 +185,14 @@ HGLOBAL createGlobalData(const Vector<char>& vector)
     return vm;
 }
 
-HGLOBAL createGlobalData(const uint8_t* data, size_t length)
+HGLOBAL createGlobalData(std::span<const uint8_t> data)
 {
-    HGLOBAL vm = ::GlobalAlloc(GPTR, length + 1);
+    HGLOBAL vm = ::GlobalAlloc(GPTR, data.size() + 1);
     if (!vm)
         return 0;
     uint8_t* buffer = static_cast<uint8_t*>(GlobalLock(vm));
-    memcpy(buffer, data, length);
-    buffer[length] = 0;
+    memcpy(buffer, data.data(), data.size());
+    buffer[data.size()] = 0;
     GlobalUnlock(vm);
     return vm;
 }
@@ -213,7 +213,7 @@ static String getFullCFHTML(IDataObject* data)
 
 static void append(Vector<char>& vector, const char* string)
 {
-    vector.append(std::span { string, strlen(string) });
+    vector.append(span(string));
 }
 
 static void append(Vector<char>& vector, const CString& string)
@@ -689,7 +689,7 @@ template<typename T> void getStringData(IDataObject* data, FORMATETC* format, Ve
     STGMEDIUM store;
     if (FAILED(data->GetData(format, &store)))
         return;
-    dataStrings.append(String(static_cast<T*>(GlobalLock(store.hGlobal)), ::GlobalSize(store.hGlobal) / sizeof(T)));
+    dataStrings.append(String({ static_cast<T*>(GlobalLock(store.hGlobal)), ::GlobalSize(store.hGlobal) / sizeof(T) }));
     GlobalUnlock(store.hGlobal);
     ReleaseStgMedium(&store);
 }

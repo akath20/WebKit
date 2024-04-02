@@ -458,7 +458,7 @@ bool WebSocketChannel::processBuffer()
     Ref<WebSocketChannel> protectedThis(*this); // The client can close the channel, potentially removing the last reference.
 
     if (m_handshake->mode() == WebSocketHandshake::Incomplete) {
-        int headerLength = m_handshake->readServerHandshake(m_buffer.data(), m_buffer.size());
+        int headerLength = m_handshake->readServerHandshake(m_buffer.span());
         if (headerLength <= 0)
             return false;
         if (m_handshake->mode() == WebSocketHandshake::Connected) {
@@ -618,7 +618,7 @@ bool WebSocketChannel::processFrame()
             if (m_continuousFrameOpCode == WebSocketFrame::OpCodeText) {
                 String message;
                 if (continuousFrameData.size())
-                    message = String::fromUTF8(continuousFrameData.data(), continuousFrameData.size());
+                    message = String::fromUTF8(continuousFrameData.span());
                 else
                     message = emptyString();
                 if (message.isNull())
@@ -681,7 +681,7 @@ bool WebSocketChannel::processFrame()
             }
         }
         if (frame.payload.size() >= 3)
-            m_closeEventReason = String::fromUTF8(&frame.payload[2], frame.payload.size() - 2);
+            m_closeEventReason = String::fromUTF8({ &frame.payload[2], frame.payload.size() - 2 });
         else
             m_closeEventReason = emptyString();
         skipBuffer(frameEnd - m_buffer.data());

@@ -207,7 +207,7 @@ void WebSocketTask::didReceiveData(WebCore::CurlStreamID, const WebCore::SharedB
                 }
             }
             if (data.size() >= 3)
-                m_closeEventReason = String::fromUTF8(&data[2], data.size() - 2);
+                m_closeEventReason = String::fromUTF8({ &data[2], data.size() - 2 });
             else
                 m_closeEventReason = emptyString();
 
@@ -289,7 +289,7 @@ Expected<bool, String> WebSocketTask::validateOpeningHandshake()
         return makeUnexpected("Unexpected handshakeing condition"_s);
     }
 
-    auto headerLength = m_handshake->readServerHandshake(m_receiveBuffer.data(), m_receiveBuffer.size());
+    auto headerLength = m_handshake->readServerHandshake(m_receiveBuffer.span());
     if (headerLength <= 0)
         return false;
 

@@ -145,6 +145,7 @@
 #include "TextIterator.h"
 #include "TouchAction.h"
 #include "TypedElementDescendantIteratorInlines.h"
+#include "VisibilityAdjustment.h"
 #include "VoidCallback.h"
 #include "WebAnimation.h"
 #include "WebAnimationTypes.h"
@@ -599,7 +600,7 @@ void Element::cloneShadowTreeIfPossible(Element& newHost)
 
     Ref clonedShadowRoot = [&] {
         Ref clone = oldShadowRoot->cloneNodeInternal(newHost.document(), Node::CloningOperation::SelfWithTemplateContent);
-        return checkedDowncast<ShadowRoot>(WTFMove(clone));
+        return downcast<ShadowRoot>(WTFMove(clone));
     }();
     newHost.addShadowRoot(clonedShadowRoot.copyRef());
     oldShadowRoot->cloneChildNodes(clonedShadowRoot);
@@ -1668,10 +1669,8 @@ inline bool shouldObtainBoundsFromBoxModel(const Element* element)
     if (is<RenderBoxModelObject>(element->renderer()))
         return true;
 
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
     if (is<RenderSVGModelObject>(element->renderer()))
         return true;
-#endif
 
     return false;
 }
@@ -1894,7 +1893,33 @@ std::optional<std::pair<CheckedPtr<RenderObject>, FloatRect>> Element::boundingA
 FloatRect Element::boundingClientRect()
 {
     Ref document = this->document();
-    document->updateLayoutIgnorePendingStylesheets({ LayoutOptions::ContentVisibilityForceLayout }, this);
+    auto needsLayout = [&] {
+        if (!document->haveStylesheetsLoaded())
+            return true;
+
+        if (RefPtr owner = document->ownerElement(); owner && owner->protectedDocument()->needsStyleRecalc())
+            return true;
+
+        document->updateRelevancyOfContentVisibilityElements();
+        document->updateStyleIfNeeded();
+        // FIXME: Expand this optimization to other elements.
+        if (!renderer() || !renderer()->isBody() || !renderer()->containingBlock() || !renderer()->containingBlock()->isDocumentElementRenderer())
+            return true;
+        auto& bodyRenderer = *renderer();
+        if (bodyRenderer.selfNeedsLayout() || bodyRenderer.containingBlock()->selfNeedsLayout() || (document->renderView() && document->renderView()->selfNeedsLayout()))
+            return true;
+        auto& bodyStyle = bodyRenderer.style();
+        if (!bodyStyle.logicalWidth().isFixed() && !bodyStyle.logicalWidth().isPercent())
+            return true;
+        if (!bodyStyle.logicalHeight().isFixed() && !bodyStyle.logicalHeight().isPercent())
+            return true;
+        // FIXME: Add support for scroll position.
+        return bodyStyle.hasViewportConstrainedPosition();
+    };
+
+    if (needsLayout())
+        document->updateLayoutIgnorePendingStylesheets({ LayoutOptions::ContentVisibilityForceLayout }, this);
+
     auto pair = boundingAbsoluteRectWithoutLayout();
     if (!pair)
         return { };
@@ -2458,7 +2483,7 @@ void Element::invalidateForQueryContainerSizeChange()
 {
     // FIXME: Ideally we would just recompute things that are actually affected by containers queries within the subtree.
     Node::invalidateStyle(Style::Validity::SubtreeInvalid);
-    setStateFlag(StateFlag::NeedsUpdateQueryContainerDependentStyle);
+    setElementStateFlag(ElementStateFlag::NeedsUpdateQueryContainerDependentStyle);
 }
 
 void Element::invalidateForResumingQueryContainerResolution()
@@ -2468,12 +2493,12 @@ void Element::invalidateForResumingQueryContainerResolution()
 
 bool Element::needsUpdateQueryContainerDependentStyle() const
 {
-    return hasStateFlag(StateFlag::NeedsUpdateQueryContainerDependentStyle);
+    return hasElementStateFlag(ElementStateFlag::NeedsUpdateQueryContainerDependentStyle);
 }
 
 void Element::clearNeedsUpdateQueryContainerDependentStyle()
 {
-    clearStateFlag(StateFlag::NeedsUpdateQueryContainerDependentStyle);
+    clearElementStateFlag(ElementStateFlag::NeedsUpdateQueryContainerDependentStyle);
 }
 
 void Element::invalidateEventListenerRegions()
@@ -3025,7 +3050,7 @@ ShadowRoot& Element::createUserAgentShadowRoot()
 
 inline void Node::setCustomElementState(CustomElementState state)
 {
-    Style::PseudoClassChangeInvalidation styleInvalidation(checkedDowncast<Element>(*this),
+    Style::PseudoClassChangeInvalidation styleInvalidation(downcast<Element>(*this),
         CSSSelector::PseudoClass::Defined,
         state == CustomElementState::Custom || state == CustomElementState::Uncustomized
     );
@@ -4470,9 +4495,9 @@ void Element::setFullscreenFlag(bool flag)
 {
     Style::PseudoClassChangeInvalidation styleInvalidation(*this, { { CSSSelector::PseudoClass::Fullscreen, flag }, { CSSSelector::PseudoClass::Modal, flag } });
     if (flag)
-        setStateFlag(StateFlag::IsFullscreen);
+        setElementStateFlag(ElementStateFlag::IsFullscreen);
     else
-        clearStateFlag(StateFlag::IsFullscreen);
+        clearElementStateFlag(ElementStateFlag::IsFullscreen);
 }
 
 #endif
@@ -5498,7 +5523,7 @@ void Element::setAttributeStyleMap(Ref<StylePropertyMap>&& map)
 
 void Element::ensureFormAssociatedCustomElement()
 {
-    auto& customElement = checkedDowncast<HTMLMaybeFormAssociatedCustomElement>(*this);
+    auto& customElement = downcast<HTMLMaybeFormAssociatedCustomElement>(*this);
     auto& data = ensureElementRareData();
     if (!data.formAssociatedCustomElement())
         data.setFormAssociatedCustomElement(makeUniqueWithoutRefCountedCheck<FormAssociatedCustomElement>(customElement));
@@ -5635,14 +5660,16 @@ CustomStateSet& Element::ensureCustomStateSet()
     return *rareData.customStateSet();
 }
 
-bool Element::isVisibilityAdjustmentRoot() const
+OptionSet<VisibilityAdjustment> Element::visibilityAdjustment() const
 {
-    return hasRareData() && elementRareData()->isVisibilityAdjustmentRoot();
+    if (!hasRareData())
+        return { };
+    return elementRareData()->visibilityAdjustment();
 }
 
-void Element::setIsVisibilityAdjustmentRoot()
+void Element::setVisibilityAdjustment(OptionSet<VisibilityAdjustment> adjustment)
 {
-    ensureElementRareData().setIsVisibilityAdjustmentRoot();
+    ensureElementRareData().setVisibilityAdjustment(adjustment);
 }
 
 } // namespace WebCore

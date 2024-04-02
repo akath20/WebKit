@@ -71,6 +71,7 @@
 #include "TouchAction.h"
 #include "TypedElementDescendantIterator.h"
 #include "TypedElementDescendantIteratorInlines.h"
+#include "VisibilityAdjustment.h"
 #include "WebAnimationTypes.h"
 #include <wtf/RobinHoodHashSet.h>
 
@@ -503,7 +504,6 @@ void Adjuster::adjust(RenderStyle& style, const RenderStyle* userAgentAppearance
         if (style.hasAutoSpecifiedZIndex())
             return true;
 
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
         // SVG2: Contrary to the rules in CSS 2.1, the z-index property applies to all SVG elements regardless
         // of the value of the position property, with one exception: as for boxes in CSS 2.1, outer ‘svg’ elements
         // must be positioned for z-index to apply to them.
@@ -513,9 +513,6 @@ void Adjuster::adjust(RenderStyle& style, const RenderStyle* userAgentAppearance
 
             return false;
         }
-#else
-        UNUSED_PARAM(element);
-#endif
 
         // Make sure our z-index value is only applied if the object is positioned.
         return style.position() == PositionType::Static && !parentBoxStyle.isDisplayFlexibleOrGridBox();
@@ -538,14 +535,10 @@ void Adjuster::adjust(RenderStyle& style, const RenderStyle* userAgentAppearance
         if (style.hasTransformRelatedProperty())
             return true;
 
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
         if (element && element->document().settings().layerBasedSVGEngineEnabled()) {
             if (auto* graphicsElement = dynamicDowncast<SVGGraphicsElement>(element); graphicsElement && graphicsElement->hasTransformRelatedAttributes())
                 return true;
         }
-#else
-        UNUSED_PARAM(element);
-#endif
 
         return false;
     };
@@ -602,7 +595,7 @@ void Adjuster::adjust(RenderStyle& style, const RenderStyle* userAgentAppearance
                 style.setHeight(Length(200, LengthType::Fixed));
         }
 
-        if (UNLIKELY(m_element->isVisibilityAdjustmentRoot() || m_parentStyle.isInVisibilityAdjustmentSubtree()))
+        if (UNLIKELY(m_element->visibilityAdjustment().contains(VisibilityAdjustment::Subtree) || m_parentStyle.isInVisibilityAdjustmentSubtree()))
             style.setIsInVisibilityAdjustmentSubtree();
     }
 
@@ -835,7 +828,6 @@ void Adjuster::adjustSVGElementStyle(RenderStyle& style, const SVGElement& svgEl
     if (!svgElement.isOutermostSVGSVGElement())
         style.setPosition(RenderStyle::initialPosition());
 
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
     // SVG2: A new stacking context must be established at an SVG element for its descendants if:
     // - it is the root element
     // - the "z-index" property applies to the element and its computed value is an integer
@@ -866,7 +858,6 @@ void Adjuster::adjustSVGElementStyle(RenderStyle& style, const SVGElement& svgEl
             || style.hasPositionedMask())
         style.setUsedZIndex(0);
     }
-#endif
 
     // (Legacy)RenderSVGRoot handles zooming for the whole SVG subtree, so foreignObject content should
     // not be scaled again.
@@ -1138,6 +1129,13 @@ bool Adjuster::adjustForTextAutosizing(RenderStyle& style, const Element& elemen
     return adjustForTextAutosizing(style, element, adjustmentForTextAutosizing(style, element));
 }
 #endif
+
+void Adjuster::adjustVisibilityForPseudoElement(RenderStyle& style, const Element& host)
+{
+    if ((style.pseudoElementType() == PseudoId::After && host.visibilityAdjustment().contains(VisibilityAdjustment::AfterPseudo))
+        || (style.pseudoElementType() == PseudoId::Before && host.visibilityAdjustment().contains(VisibilityAdjustment::BeforePseudo)))
+        style.setIsInVisibilityAdjustmentSubtree();
+}
 
 }
 }

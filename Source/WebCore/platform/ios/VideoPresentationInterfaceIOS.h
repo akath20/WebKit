@@ -44,6 +44,7 @@
 #include <wtf/ThreadSafeWeakPtr.h>
 
 OBJC_CLASS AVPlayerViewController;
+OBJC_CLASS LMPlayableViewController;
 OBJC_CLASS UIViewController;
 OBJC_CLASS UIWindow;
 OBJC_CLASS UIView;
@@ -63,7 +64,7 @@ class VideoPresentationInterfaceIOS
     , public VideoFullscreenCaptions
     , public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<VideoPresentationInterfaceIOS, WTF::DestructionThread::MainRunLoop> {
 public:
-    WEBCORE_EXPORT virtual ~VideoPresentationInterfaceIOS();
+    WEBCORE_EXPORT ~VideoPresentationInterfaceIOS();
     WEBCORE_EXPORT void setVideoPresentationModel(VideoPresentationModel*);
     PlaybackSessionInterfaceIOS& playbackSessionInterface() const { return m_playbackSessionInterface.get(); }
     PlaybackSessionModel* playbackSessionModel() const { return m_playbackSessionInterface->playbackSessionModel(); }
@@ -148,6 +149,10 @@ public:
     WEBCORE_EXPORT virtual bool pictureInPictureWasStartedWhenEnteringBackground() const = 0;
 
     WEBCORE_EXPORT std::optional<MediaPlayerIdentifier> playerIdentifier() const;
+
+#if ENABLE(LINEAR_MEDIA_PLAYER)
+    virtual LMPlayableViewController *playableViewController() { return nil; }
+#endif
 
 #if !RELEASE_LOG_DISABLED
     const void* logIdentifier() const;

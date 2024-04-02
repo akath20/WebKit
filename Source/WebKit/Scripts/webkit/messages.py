@@ -427,6 +427,7 @@ def types_that_cannot_be_forward_declared():
         'MachSendRight',
         'MediaTime',
         'PlatformXR::ReferenceSpaceType',
+        'PlatformXR::Layout',
         'PlatformXR::SessionFeature',
         'PlatformXR::SessionMode',
         'PlatformXR::VisibilityState',
@@ -777,6 +778,7 @@ def headers_for_type(type):
         'PAL::SessionID': ['<pal/SessionID.h>'],
         'PAL::UserInterfaceIdiom': ['<pal/system/ios/UserInterfaceIdiom.h>'],
         'PlatformXR::FrameData': ['<WebCore/PlatformXR.h>'],
+        'PlatformXR::Layout': ['<WebCore/PlatformXR.h>'],
         'PlatformXR::ReferenceSpaceType': ['<WebCore/PlatformXR.h>'],
         'PlatformXR::SessionFeature': ['<WebCore/PlatformXR.h>'],
         'PlatformXR::SessionMode': ['<WebCore/PlatformXR.h>'],
@@ -1371,6 +1373,7 @@ def generate_message_names_header(receivers):
     result.append('\n')
     result.append('#include <algorithm>\n')
     result.append('#include <wtf/EnumTraits.h>\n')
+    result.append('#include <wtf/text/ASCIILiteral.h>\n')
     result.append('\n')
     result.append('namespace IPC {\n')
     result.append('\n')
@@ -1421,6 +1424,12 @@ def generate_message_names_header(receivers):
         result.append('    return Detail::messageDescriptions[static_cast<size_t>(messageName)].%s;\n' % fname)
         result.append('}\n')
         result.append('\n')
+    result.append('inline ASCIILiteral descriptionLiteral(MessageName messageName)\n')
+    result.append('{\n')
+    result.append('    messageName = std::min(messageName, MessageName::Last);\n')
+    result.append('    return ASCIILiteral::fromLiteralUnsafe(Detail::messageDescriptions[static_cast<size_t>(messageName)].description);\n')
+    result.append('}\n')
+    result.append('\n')
     result.append('constexpr bool messageIsSync(MessageName name)\n')
     result.append('{\n')
     if seen_synchronous:

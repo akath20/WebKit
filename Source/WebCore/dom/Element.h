@@ -64,6 +64,7 @@ class ElementRareData;
 class FormAssociatedCustomElement;
 class FormListedElement;
 class HTMLDocument;
+class HTMLFormControlElement;
 class IntSize;
 class JSCustomElementInterface;
 class KeyframeEffectStack;
@@ -98,6 +99,7 @@ enum class IsSyntheticClick : bool { No, Yes };
 enum class ParserContentPolicy : uint8_t;
 enum class ResolveURLs : uint8_t { No, NoExcludingURLsForPrivacy, Yes, YesExcludingURLsForPrivacy };
 enum class SelectionRestorationMode : uint8_t;
+enum class VisibilityAdjustment : uint8_t;
 
 struct CheckVisibilityOptions;
 struct FullscreenOptions;
@@ -609,7 +611,7 @@ public:
     void removeFromTopLayer();
 
 #if ENABLE(FULLSCREEN_API)
-    bool hasFullscreenFlag() const { return hasStateFlag(StateFlag::IsFullscreen); }
+    bool hasFullscreenFlag() const { return hasElementStateFlag(ElementStateFlag::IsFullscreen); }
     void setFullscreenFlag(bool);
     WEBCORE_EXPORT void webkitRequestFullscreen();
     virtual void requestFullscreen(FullscreenOptions&&, RefPtr<DeferredPromise>&&);
@@ -620,7 +622,7 @@ public:
     void clearPopoverData();
     bool isPopoverShowing() const;
 
-    virtual void handleInvokeInternal(const AtomString&) { }
+    virtual bool handleInvokeInternal(const HTMLFormControlElement&, const AtomString&) { return false; }
 
     ExceptionOr<void> setPointerCapture(int32_t);
     ExceptionOr<void> releasePointerCapture(int32_t);
@@ -631,8 +633,8 @@ public:
     WEBCORE_EXPORT void requestPointerLock();
 #endif
 
-    bool isVisibilityAdjustmentRoot() const;
-    void setIsVisibilityAdjustmentRoot();
+    OptionSet<VisibilityAdjustment> visibilityAdjustment() const;
+    void setVisibilityAdjustment(OptionSet<VisibilityAdjustment>);
 
     bool isSpellCheckingEnabled() const;
     WEBCORE_EXPORT bool isWritingSuggestionsEnabled() const;
@@ -778,8 +780,8 @@ public:
     bool hasCustomState(const AtomString& state) const;
     CustomStateSet& ensureCustomStateSet();
 
-    bool capturedInViewTransition() const { return hasEventTargetFlag(EventTargetFlag::CapturedInViewTransition); }
-    void setCapturedInViewTransition(bool captured) { setEventTargetFlag(EventTargetFlag::CapturedInViewTransition, captured); }
+    bool capturedInViewTransition() const { return hasElementStateFlag(ElementStateFlag::CapturedInViewTransition); }
+    void setCapturedInViewTransition(bool captured) { setElementStateFlag(ElementStateFlag::CapturedInViewTransition, captured); }
 
 protected:
     Element(const QualifiedName&, Document&, OptionSet<TypeFlag>);
@@ -925,8 +927,8 @@ private:
     bool hasLanguageAttribute() const { return hasLangAttr() || hasXMLLangAttr(); }
     bool hasLangAttrKnownToMatchDocumentElement() const { return hasLanguageAttribute() && effectiveLangKnownToMatchDocumentElement(); }
 
-    bool hasEverHadSmoothScroll() const { return hasStateFlag(StateFlag::EverHadSmoothScroll); }
-    void setHasEverHadSmoothScroll(bool value) { return setStateFlag(StateFlag::EverHadSmoothScroll, value); }
+    bool hasEverHadSmoothScroll() const { return hasElementStateFlag(ElementStateFlag::EverHadSmoothScroll); }
+    void setHasEverHadSmoothScroll(bool value) { return setElementStateFlag(ElementStateFlag::EverHadSmoothScroll, value); }
 
     void parentOrShadowHostNode() const = delete; // Call parentNode() instead.
 

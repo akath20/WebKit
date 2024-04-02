@@ -267,78 +267,78 @@ PlatformGLObject RemoteGraphicsContextGLProxy::createBuffer()
 {
     if (isContextLost())
         return { };
-    auto sendResult = sendSync(Messages::RemoteGraphicsContextGL::CreateBuffer());
-    if (!sendResult.succeeded()) {
+    auto name = createObjectName();
+    auto sendResult = send(Messages::RemoteGraphicsContextGL::CreateBuffer(name));
+    if (sendResult != IPC::Error::NoError) {
         markContextLost();
         return { };
     }
-    auto& [returnValue] = sendResult.reply();
-    return returnValue;
+    return name;
 }
 
 PlatformGLObject RemoteGraphicsContextGLProxy::createFramebuffer()
 {
     if (isContextLost())
         return { };
-    auto sendResult = sendSync(Messages::RemoteGraphicsContextGL::CreateFramebuffer());
-    if (!sendResult.succeeded()) {
+    auto name = createObjectName();
+    auto sendResult = send(Messages::RemoteGraphicsContextGL::CreateFramebuffer(name));
+    if (sendResult != IPC::Error::NoError) {
         markContextLost();
         return { };
     }
-    auto& [returnValue] = sendResult.reply();
-    return returnValue;
+    return name;
 }
 
 PlatformGLObject RemoteGraphicsContextGLProxy::createProgram()
 {
     if (isContextLost())
         return { };
-    auto sendResult = sendSync(Messages::RemoteGraphicsContextGL::CreateProgram());
-    if (!sendResult.succeeded()) {
+    auto name = createObjectName();
+    auto sendResult = send(Messages::RemoteGraphicsContextGL::CreateProgram(name));
+    if (sendResult != IPC::Error::NoError) {
         markContextLost();
         return { };
     }
-    auto& [returnValue] = sendResult.reply();
-    return returnValue;
+    return name;
 }
 
 PlatformGLObject RemoteGraphicsContextGLProxy::createRenderbuffer()
 {
     if (isContextLost())
         return { };
-    auto sendResult = sendSync(Messages::RemoteGraphicsContextGL::CreateRenderbuffer());
-    if (!sendResult.succeeded()) {
+    auto name = createObjectName();
+    auto sendResult = send(Messages::RemoteGraphicsContextGL::CreateRenderbuffer(name));
+    if (sendResult != IPC::Error::NoError) {
         markContextLost();
         return { };
     }
-    auto& [returnValue] = sendResult.reply();
-    return returnValue;
+    return name;
 }
 
 PlatformGLObject RemoteGraphicsContextGLProxy::createShader(GCGLenum arg0)
 {
     if (isContextLost())
         return { };
-    auto sendResult = sendSync(Messages::RemoteGraphicsContextGL::CreateShader(arg0));
-    if (!sendResult.succeeded()) {
+    auto name = createObjectName();
+    auto sendResult = send(Messages::RemoteGraphicsContextGL::CreateShader(name, arg0));
+    if (sendResult != IPC::Error::NoError) {
         markContextLost();
         return { };
     }
-    auto& [returnValue] = sendResult.reply();
-    return returnValue;
+    return name;
 }
 
 PlatformGLObject RemoteGraphicsContextGLProxy::createTexture()
 {
     if (isContextLost())
         return { };
-    auto sendResult = sendSync(Messages::RemoteGraphicsContextGL::CreateTexture());
-    if (!sendResult.succeeded()) {
+    auto name = createObjectName();
+    auto sendResult = send(Messages::RemoteGraphicsContextGL::CreateTexture(name));
+    if (sendResult != IPC::Error::NoError) {
         markContextLost();
         return { };
     }
-    auto& [returnValue] = sendResult.reply();
-    return returnValue;
+    return name;
 }
 
 void RemoteGraphicsContextGLProxy::cullFace(GCGLenum mode)
@@ -1735,13 +1735,13 @@ PlatformGLObject RemoteGraphicsContextGLProxy::createVertexArray()
 {
     if (isContextLost())
         return { };
-    auto sendResult = sendSync(Messages::RemoteGraphicsContextGL::CreateVertexArray());
-    if (!sendResult.succeeded()) {
+    auto name = createObjectName();
+    auto sendResult = send(Messages::RemoteGraphicsContextGL::CreateVertexArray(name));
+    if (sendResult != IPC::Error::NoError) {
         markContextLost();
         return { };
     }
-    auto& [returnValue] = sendResult.reply();
-    return returnValue;
+    return name;
 }
 
 void RemoteGraphicsContextGLProxy::deleteVertexArray(PlatformGLObject arg0)
@@ -2282,13 +2282,13 @@ PlatformGLObject RemoteGraphicsContextGLProxy::createQuery()
 {
     if (isContextLost())
         return { };
-    auto sendResult = sendSync(Messages::RemoteGraphicsContextGL::CreateQuery());
-    if (!sendResult.succeeded()) {
+    auto name = createObjectName();
+    auto sendResult = send(Messages::RemoteGraphicsContextGL::CreateQuery(name));
+    if (sendResult != IPC::Error::NoError) {
         markContextLost();
         return { };
     }
-    auto& [returnValue] = sendResult.reply();
-    return returnValue;
+    return name;
 }
 
 void RemoteGraphicsContextGLProxy::deleteQuery(PlatformGLObject query)
@@ -2367,13 +2367,13 @@ PlatformGLObject RemoteGraphicsContextGLProxy::createSampler()
 {
     if (isContextLost())
         return { };
-    auto sendResult = sendSync(Messages::RemoteGraphicsContextGL::CreateSampler());
-    if (!sendResult.succeeded()) {
+    auto name = createObjectName();
+    auto sendResult = send(Messages::RemoteGraphicsContextGL::CreateSampler(name));
+    if (sendResult != IPC::Error::NoError) {
         markContextLost();
         return { };
     }
-    auto& [returnValue] = sendResult.reply();
-    return returnValue;
+    return name;
 }
 
 void RemoteGraphicsContextGLProxy::deleteSampler(PlatformGLObject sampler)
@@ -2537,13 +2537,13 @@ PlatformGLObject RemoteGraphicsContextGLProxy::createTransformFeedback()
 {
     if (isContextLost())
         return { };
-    auto sendResult = sendSync(Messages::RemoteGraphicsContextGL::CreateTransformFeedback());
-    if (!sendResult.succeeded()) {
+    auto name = createObjectName();
+    auto sendResult = send(Messages::RemoteGraphicsContextGL::CreateTransformFeedback(name));
+    if (sendResult != IPC::Error::NoError) {
         markContextLost();
         return { };
     }
-    auto& [returnValue] = sendResult.reply();
-    return returnValue;
+    return name;
 }
 
 void RemoteGraphicsContextGLProxy::deleteTransformFeedback(PlatformGLObject id)
@@ -2734,7 +2734,7 @@ void RemoteGraphicsContextGLProxy::uniformBlockBinding(PlatformGLObject program,
     }
 }
 
-void RemoteGraphicsContextGLProxy::getActiveUniformBlockiv(GCGLuint program, GCGLuint uniformBlockIndex, GCGLenum pname, std::span<GCGLint> params)
+void RemoteGraphicsContextGLProxy::getActiveUniformBlockiv(PlatformGLObject program, GCGLuint uniformBlockIndex, GCGLenum pname, std::span<GCGLint> params)
 {
     if (isContextLost())
         return;
@@ -2775,13 +2775,13 @@ PlatformGLObject RemoteGraphicsContextGLProxy::createQueryEXT()
 {
     if (isContextLost())
         return { };
-    auto sendResult = sendSync(Messages::RemoteGraphicsContextGL::CreateQueryEXT());
-    if (!sendResult.succeeded()) {
+    auto name = createObjectName();
+    auto sendResult = send(Messages::RemoteGraphicsContextGL::CreateQueryEXT(name));
+    if (sendResult != IPC::Error::NoError) {
         markContextLost();
         return { };
     }
-    auto& [returnValue] = sendResult.reply();
-    return returnValue;
+    return name;
 }
 
 void RemoteGraphicsContextGLProxy::deleteQueryEXT(PlatformGLObject query)
@@ -3128,6 +3128,41 @@ bool RemoteGraphicsContextGLProxy::enableRequiredWebXRExtensions()
     }
     auto& [returnValue] = sendResult.reply();
     return returnValue;
+}
+
+bool RemoteGraphicsContextGLProxy::createFoveation(WebCore::IntSize physicalSizeLeft, WebCore::IntSize physicalSizeRight, WebCore::IntSize screenSize, std::span<const GCGLfloat> horizontalSamplesLeft, std::span<const GCGLfloat> verticalSamples, std::span<const GCGLfloat> horizontalSamplesRight)
+{
+    if (isContextLost())
+        return { };
+    auto sendResult = sendSync(Messages::RemoteGraphicsContextGL::CreateFoveation(physicalSizeLeft, physicalSizeRight, screenSize, std::span<const float>(reinterpret_cast<const float*>(horizontalSamplesLeft.data()), horizontalSamplesLeft.size()), std::span<const float>(reinterpret_cast<const float*>(verticalSamples.data()), verticalSamples.size()), std::span<const float>(reinterpret_cast<const float*>(horizontalSamplesRight.data()), horizontalSamplesRight.size())));
+    if (!sendResult.succeeded()) {
+        markContextLost();
+        return { };
+    }
+    auto& [returnValue] = sendResult.reply();
+    return returnValue;
+}
+
+void RemoteGraphicsContextGLProxy::enableFoveation(GCGLuint framebuffer)
+{
+    if (isContextLost())
+        return;
+    auto sendResult = send(Messages::RemoteGraphicsContextGL::EnableFoveation(framebuffer));
+    if (sendResult != IPC::Error::NoError) {
+        markContextLost();
+        return;
+    }
+}
+
+void RemoteGraphicsContextGLProxy::disableFoveation()
+{
+    if (isContextLost())
+        return;
+    auto sendResult = send(Messages::RemoteGraphicsContextGL::DisableFoveation());
+    if (sendResult != IPC::Error::NoError) {
+        markContextLost();
+        return;
+    }
 }
 
 }

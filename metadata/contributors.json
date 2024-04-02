@@ -1462,13 +1462,14 @@
    },
    {
       "emails" : [
+         "cadubentzen@igalia.com",
          "cadubentzen@gmail.com",
          "cramalho@igalia.com"
       ],
-      "name" : "Carlos Eduardo Ramalho",
+      "github" : "cadubentzen",
+      "name" : "Carlos Bentzen",
       "nicks" : [
-         "cadubentzen",
-         "cramalho"
+         "cadubentzen"
       ]
    },
    {
@@ -6033,6 +6034,18 @@
    },
    {
       "emails" : [
+         "nitinmahendru@apple.com",
+         "nitin.mahendru88@gmail.com"
+      ],
+      "expertise" : "Applied Cryptography",
+      "github" : "nmahendru",
+      "name" : "Nitin Mahendru",
+      "nicks" : [
+         "Nitin"
+      ]
+   },
+   {
+      "emails" : [
          "noam@webkit.org",
          "noam.rosenthal@nokia.com"
       ],
@@ -6778,7 +6791,7 @@
       "nicks" : [
          "rreno"
       ],
-      "status" : "committer"
+      "status" : "reviewer"
    },
    {
       "emails" : [

@@ -28,12 +28,12 @@
 
 #if ENABLE(LINEAR_MEDIA_PLAYER)
 
+#import "LinearMediaKitSPI.h"
 #import "PlaybackSessionInterfaceLMK.h"
 #import "WKSLinearMediaPlayer.h"
 #import "WKSLinearMediaTypes.h"
 #import <UIKit/UIKit.h>
 #import <WebCore/WebAVPlayerLayerView.h>
-#import <pal/spi/vision/LinearMediaKitSPI.h>
 
 namespace WebKit {
 
@@ -64,16 +64,12 @@ void VideoPresentationInterfaceLMK::setupFullscreen(UIView& videoView, const Flo
 
 void VideoPresentationInterfaceLMK::setupPlayerViewController()
 {
-    if (m_playerViewController)
-        return;
-
     linearMediaPlayer().allowFullScreenFromInline = YES;
+    linearMediaPlayer().captionLayer = captionsLayer();
     linearMediaPlayer().contentType = WKSLinearMediaContentTypePlanar;
     linearMediaPlayer().presentationMode = WKSLinearMediaPresentationModeInline;
-    // FIXME: pass a valid caption layer (rdar://124223292)
-    linearMediaPlayer().captionLayer = CALayer.layer;
 
-    m_playerViewController = [linearMediaPlayer() makeViewController];
+    ensurePlayableViewController();
 }
 
 void VideoPresentationInterfaceLMK::invalidatePlayerViewController()
@@ -108,6 +104,28 @@ void VideoPresentationInterfaceLMK::setContentDimensions(const FloatSize& conten
 void VideoPresentationInterfaceLMK::setShowsPlaybackControls(bool showsPlaybackControls)
 {
     linearMediaPlayer().showsPlaybackControls = showsPlaybackControls;
+}
+
+void VideoPresentationInterfaceLMK::setupCaptionsLayer(CALayer *, const FloatSize& initialSize)
+{
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    [captionsLayer() removeFromSuperlayer];
+    [captionsLayer() setAnchorPoint:CGPointZero];
+    [captionsLayer() setBounds:CGRectMake(0, 0, initialSize.width(), initialSize.height())];
+    [CATransaction commit];
+}
+
+LMPlayableViewController *VideoPresentationInterfaceLMK::playableViewController()
+{
+    ensurePlayableViewController();
+    return m_playerViewController.get();
+}
+
+void VideoPresentationInterfaceLMK::ensurePlayableViewController()
+{
+    if (!m_playerViewController)
+        m_playerViewController = [linearMediaPlayer() makeViewController];
 }
 
 } // namespace WebKit

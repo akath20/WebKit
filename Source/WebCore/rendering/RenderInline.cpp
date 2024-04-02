@@ -34,7 +34,6 @@
 #include "InlineIteratorInlineBox.h"
 #include "InlineIteratorLineBox.h"
 #include "LayoutIntegrationLineLayout.h"
-#include "LegacyInlineFlowBoxInlines.h"
 #include "LegacyInlineTextBox.h"
 #include "RenderBlock.h"
 #include "RenderBoxInlines.h"
@@ -427,7 +426,7 @@ bool RenderInline::nodeAtPoint(const HitTestRequest& request, HitTestResult& res
     return m_lineBoxes.hitTest(this, request, result, locationInContainer, accumulatedOffset, hitTestAction);
 }
 
-VisiblePosition RenderInline::positionForPoint(const LayoutPoint& point, const RenderFragmentContainer* fragment)
+VisiblePosition RenderInline::positionForPoint(const LayoutPoint& point, HitTestSource source, const RenderFragmentContainer* fragment)
 {
     auto& containingBlock = *this->containingBlock();
 
@@ -437,13 +436,13 @@ VisiblePosition RenderInline::positionForPoint(const LayoutPoint& point, const R
         while (continuation) {
             RenderBlock* currentBlock = continuation->isInline() ? continuation->containingBlock() : downcast<RenderBlock>(continuation);
             if (continuation->isInline() || continuation->firstChild())
-                return continuation->positionForPoint(parentBlockPoint - currentBlock->locationOffset(), fragment);
+                return continuation->positionForPoint(parentBlockPoint - currentBlock->locationOffset(), source, fragment);
             continuation = continuation->inlineContinuation();
         }
-        return RenderBoxModelObject::positionForPoint(point, fragment);
+        return RenderBoxModelObject::positionForPoint(point, source, fragment);
     }
 
-    return containingBlock.positionForPoint(point, fragment);
+    return containingBlock.positionForPoint(point, source, fragment);
 }
 
 class LinesBoundingBoxGeneratorContext {
@@ -487,11 +486,11 @@ LayoutUnit RenderInline::innerPaddingBoxWidth() const
         return { };
 
     if (style().isLeftToRightDirection()) {
-        firstInlineBoxPaddingBoxLeft = firstInlineBox->logicalLeft() + firstInlineBox->borderLogicalLeft();
-        lastInlineBoxPaddingBoxRight = lastInlineBox->logicalRight() - lastInlineBox->borderLogicalRight();
+        firstInlineBoxPaddingBoxLeft = firstInlineBox->logicalLeft();
+        lastInlineBoxPaddingBoxRight = lastInlineBox->logicalRight();
     } else {
-        lastInlineBoxPaddingBoxRight = firstInlineBox->logicalRight() - firstInlineBox->borderLogicalRight();
-        firstInlineBoxPaddingBoxLeft = lastInlineBox->logicalLeft() + lastInlineBox->borderLogicalLeft();
+        lastInlineBoxPaddingBoxRight = firstInlineBox->logicalRight();
+        firstInlineBoxPaddingBoxLeft = lastInlineBox->logicalLeft();
     }
     return std::max(0_lu, lastInlineBoxPaddingBoxRight - firstInlineBoxPaddingBoxLeft);
 }
