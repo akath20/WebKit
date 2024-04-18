@@ -230,11 +230,6 @@ void UnifiedTextReplacementController::textReplacementSessionDidReceiveReplaceme
     ASSERT(m_contextRanges.contains(uuid));
 
     RefPtr liveRange = m_contextRanges.get(uuid);
-    auto sessionRange = WebCore::makeSimpleRange(liveRange);
-    if (!sessionRange) {
-        ASSERT_NOT_REACHED();
-        return;
-    }
 
     m_webPage->removeTextIndicatorStyleForID(uuid);
 
@@ -243,6 +238,12 @@ void UnifiedTextReplacementController::textReplacementSessionDidReceiveReplaceme
     size_t additionalOffset = 0;
 
     for (const auto& replacementData : replacements) {
+        auto sessionRange = WebCore::makeSimpleRange(liveRange);
+        if (!sessionRange) {
+            ASSERT_NOT_REACHED();
+            break;
+        }
+
         auto locationWithOffset = replacementData.originalRange.location + additionalOffset;
 
         auto originalRangeWithOffset = WebCore::CharacterRange { locationWithOffset, replacementData.originalRange.length };
@@ -355,16 +356,21 @@ void UnifiedTextReplacementController::didEndTextReplacementSession(const WTF::U
     // to this session.
 
     if (!accepted) {
-        document->markers().forEachOfTypes({ WebCore::DocumentMarker::Type::UnifiedTextReplacement }, [&] (auto& node, auto& marker) mutable {
+        Vector<std::pair<WebCore::SimpleRange, String>> replacements;
+
+        document->markers().forEachOfTypes({ WebCore::DocumentMarker::Type::UnifiedTextReplacement }, [&replacements] (auto& node, auto& marker) {
             auto data = std::get<WebCore::DocumentMarker::UnifiedTextReplacementData>(marker.data());
             if (data.state == WebCore::DocumentMarker::UnifiedTextReplacementData::State::Reverted)
                 return false;
 
             auto rangeToReplace = makeSimpleRange(node, marker);
-            replaceTextInRange(*document, rangeToReplace, data.originalText);
+            replacements.append({ rangeToReplace, data.originalText });
 
             return false;
         });
+
+        for (const auto& [range, text] : replacements)
+            replaceTextInRange(*document, range, text);
     }
 
     document->markers().removeMarkers({ WebCore::DocumentMarker::Type::UnifiedTextReplacement });
@@ -702,43 +708,6 @@ void UnifiedTextReplacementController::updateStateForSelectedReplacementIfNeeded
 
     m_webPage->textReplacementSessionUpdateStateForReplacementWithUUID(data.sessionUUID, WebTextReplacementData::State::Active, data.uuid);
     m_webPage->textReplacementSessionShowInformationForReplacementWithUUIDRelativeToRect(data.sessionUUID, data.uuid, rect);
-}
-
-
-void UnifiedTextReplacementController::getTextIndicatorForID(const WTF::UUID& uuid, CompletionHandler<void(std::optional<WebCore::TextIndicatorData>&&)>&& completionHandler)
-{
-    RefPtr range = m_contextRanges.get(uuid);
-    auto simpleRange = makeSimpleRange(range.get());
-
-    if (!simpleRange) {
-        completionHandler(std::nullopt);
-        return;
-    }
-
-    RefPtr corePage = m_webPage->corePage();
-    if (!corePage) {
-        completionHandler(std::nullopt);
-        return;
-    }
-
-    RefPtr localMainFrame = dynamicDowncast<WebCore::LocalFrame>(corePage->mainFrame());
-    if (!localMainFrame) {
-        completionHandler(std::nullopt);
-        return;
-    }
-
-    constexpr OptionSet<WebCore::TextIndicatorOption> textIndicatorOptions {
-        WebCore::TextIndicatorOption::IncludeSnapshotOfAllVisibleContentWithoutSelection,
-        WebCore::TextIndicatorOption::ExpandClipBeyondVisibleRect,
-        WebCore::TextIndicatorOption::UseSelectionRectForSizing
-    };
-    RefPtr textIndicator = WebCore::TextIndicator::createWithRange(*simpleRange, textIndicatorOptions, WebCore::TextIndicatorPresentationTransition::None, { });
-    if (!textIndicator) {
-        completionHandler(std::nullopt);
-        return;
-    }
-
-    completionHandler(textIndicator->data());
 }
 
 } // namespace WebKit

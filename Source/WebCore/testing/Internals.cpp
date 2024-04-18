@@ -6816,7 +6816,7 @@ bool Internals::hasSandboxUnixSyscallAccess(const String& process, unsigned sysc
 #endif
 }
 
-String Internals::windowLocationHost(LocalDOMWindow& window)
+String Internals::windowLocationHost(DOMWindow& window)
 {
     return window.location().host();
 }
@@ -7395,6 +7395,19 @@ void Internals::setHistoryTotalStateObjectPayloadLimitOverride(uint32_t limit)
     window->history().setTotalStateObjectPayloadLimitOverride(limit);
 }
 
+void Internals::setPDFDisplayModeForTesting(Element& element, const String& displayMode) const
+{
+    RefPtr pluginElement = dynamicDowncast<HTMLPlugInElement>(element);
+    if (!pluginElement)
+        return;
+
+    RefPtr pluginViewBase = pluginElement->pluginWidget();
+    if (!pluginViewBase)
+        return;
+
+    pluginViewBase->setPDFDisplayModeForTesting(displayMode);
+}
+
 Vector<Internals::PDFAnnotationRect> Internals::pdfAnnotationRectsForTesting(Element& element) const
 {
     Vector<PDFAnnotationRect> annotationRects;
@@ -7415,6 +7428,18 @@ void Internals::registerPDFTest(Ref<VoidCallback>&& callback, Element& element)
 
     if (RefPtr pluginViewBase = pluginElement->pluginWidget())
         pluginViewBase->registerPDFTestCallback(WTFMove(callback));
+}
+
+const String& Internals::defaultSpatialTrackingLabel() const
+{
+#if HAVE(SPATIAL_TRACKING_LABEL)
+    auto* document = contextDocument();
+    if (!document)
+        return nullString();
+    if (RefPtr page = document->page())
+        return page->defaultSpatialTrackingLabel();
+#endif
+    return nullString();
 }
 
 } // namespace WebCore

@@ -125,7 +125,7 @@ static bool shouldAllowAccessibilityRoleAsPointerCursorReplacement(const Element
     }
 }
 
-bool elementMatchesHoverRules(Element& element)
+static bool elementMatchesHoverRules(Element& element)
 {
     bool foundHoverRules = false;
     bool initialValue = element.isUserActionElement() && element.document().userActionElements().isHovered(element);
@@ -223,6 +223,13 @@ static bool isGuardContainer(const Element& element)
 
     auto& renderer = *element.renderer();
     return hasTransparentContainerStyle(renderer.style());
+}
+
+static FloatRect absoluteBoundingRect(const RenderObject& renderer)
+{
+    Vector<FloatQuad> quads;
+    renderer.absoluteQuads(quads);
+    return unitedBoundingBoxes(quads);
 }
 
 static bool cachedImageIsPhoto(const CachedImage& cachedImage)
@@ -423,8 +430,8 @@ std::optional<InteractionRegion> interactionRegionForRenderedRegion(RenderObject
     std::optional<Path> clipPath = std::nullopt;
     RefPtr styleClipPath = regionRenderer.style().clipPath();
 
-    if (styleClipPath && styleClipPath->type() == PathOperation::OperationType::Shape) {
-        auto boundingRect = originalElement->boundingClientRect();
+    if (styleClipPath && styleClipPath->type() == PathOperation::OperationType::Shape && originalElement) {
+        auto boundingRect = absoluteBoundingRect(regionRenderer);
         clipPath = styleClipPath->getPath(TransformOperationData(FloatRect(FloatPoint(), boundingRect.size())));
     } else if (iconImage && originalElement) {
         LayoutRect imageRect(rect);
@@ -432,7 +439,7 @@ std::optional<InteractionRegion> interactionRegionForRenderedRegion(RenderObject
         Shape::DisplayPaths paths;
         shape->buildDisplayPaths(paths);
         auto path = paths.shape;
-        auto boundingRect = originalElement->boundingClientRect();
+        auto boundingRect = absoluteBoundingRect(regionRenderer);
         path.translate(FloatSize(-boundingRect.x(), -boundingRect.y()));
         clipPath = path;
     } else if (svgClipElements) {

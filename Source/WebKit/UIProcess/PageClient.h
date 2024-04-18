@@ -245,6 +245,9 @@ public:
     // Return whether the view is visible.
     virtual bool isViewVisible() = 0;
 
+    // Called when the activity state of the page transitions from non-visible to visible.
+    virtual void viewIsBecomingVisible() { }
+
 #if PLATFORM(COCOA)
     virtual bool canTakeForegroundAssertions() = 0;
 #endif
@@ -732,6 +735,10 @@ public:
 
 #if PLATFORM(IOS_FAMILY)
     virtual UIViewController *presentingViewController() const = 0;
+#endif
+
+#if HAVE(SPATIAL_TRACKING_LABEL)
+    virtual const String& spatialTrackingLabel() const = 0;
 #endif
 };
 

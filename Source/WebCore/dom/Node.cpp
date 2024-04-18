@@ -984,7 +984,7 @@ void Node::adjustStyleValidity(Style::Validity validity, Style::InvalidationMode
     case Style::InvalidationMode::Normal:
         break;
     case Style::InvalidationMode::RecompositeLayer:
-        setStyleFlag(NodeStyleFlag::StyleResolutionShouldRecompositeLayer);
+        setStateFlag(StateFlag::StyleResolutionShouldRecompositeLayer);
         break;
     case Style::InvalidationMode::RebuildRenderer:
     case Style::InvalidationMode::InsertedIntoAncestor:
@@ -2834,9 +2834,9 @@ Node::Editability Node::computeEditabilityForMouseClickEvents(const RenderStyle*
     return computeEditabilityWithStyle(style, userSelectAllTreatment, style ? ShouldUpdateStyle::DoNotUpdate : ShouldUpdateStyle::Update);
 }
 
-bool Node::willRespondToMouseClickEvents() const
+bool Node::willRespondToMouseClickEvents(const RenderStyle* styleToUse) const
 {
-    return willRespondToMouseClickEventsWithEditability(computeEditabilityForMouseClickEvents());
+    return willRespondToMouseClickEventsWithEditability(computeEditabilityForMouseClickEvents(styleToUse));
 }
 
 bool Node::willRespondToMouseClickEventsWithEditability(Editability editability) const

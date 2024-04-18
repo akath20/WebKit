@@ -86,6 +86,10 @@ using namespace WebCore;
 
 static id attributeValueForTesting(const RefPtr<AXCoreObject>&, NSString *);
 
+#ifndef NSAccessibilityActiveElementAttribute
+#define NSAccessibilityActiveElementAttribute @"AXActiveElement"
+#endif
+
 // Cell Tables
 #ifndef NSAccessibilitySelectedCellsAttribute
 #define NSAccessibilitySelectedCellsAttribute @"AXSelectedCells"
@@ -761,13 +765,11 @@ static RetainPtr<AXTextMarkerRef> previousTextMarker(AXObjectCache* cache, const
     return adoptCF(AXTextMarkerCreate(kCFAllocatorDefault, (const UInt8*)&textMarkerData.value(), sizeof(textMarkerData.value())));
 }
 
-- (NSAttributedString *)attributedStringForTextMarkerRange:(AXTextMarkerRangeRef)textMarkerRangeRef spellCheck:(AXCoreObject::SpellCheck)spellCheck
+static NSAttributedString *attributedStringForTextMarkerRange(const AXCoreObject& object, AXTextMarkerRangeRef textMarkerRangeRef, AXCoreObject::SpellCheck spellCheck)
 {
     if (!textMarkerRangeRef)
         return nil;
-
-    RefPtr<AXCoreObject> object = self.axBackingObject;
-    return object ? object->attributedStringForTextMarkerRange({ textMarkerRangeRef }, spellCheck).autorelease() : nil;
+    return object.attributedStringForTextMarkerRange({ textMarkerRangeRef }, spellCheck).autorelease();
 }
 
 ALLOW_DEPRECATED_IMPLEMENTATIONS_BEGIN
@@ -808,9 +810,12 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
     return actions;
 }
 
-- (NSArray*)_additionalAccessibilityAttributeNames:(const RefPtr<AXCoreObject>&)backingObject
+- (NSArray *)_additionalAccessibilityAttributeNames:(const RefPtr<AXCoreObject>&)backingObject
 {
     NSMutableArray *additional = [NSMutableArray array];
+    if (backingObject->supportsActiveDescendant())
+        [additional addObject:NSAccessibilityActiveElementAttribute];
+
     if (backingObject->supportsARIAOwns())
         [additional addObject:NSAccessibilityOwnsAttribute];
 
@@ -924,10 +929,8 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
     if (backingObject->titleUIElement())
         [additional addObject:NSAccessibilityTitleUIElementAttribute];
 
-#if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
-    if (AXObjectCache::isIsolatedTreeEnabled())
-        [additional addObject:NSAccessibilityRelativeFrameAttribute];
-#endif
+    if (backingObject->isColumnHeader() || backingObject->isRowHeader())
+        [additional addObject:NSAccessibilitySortDirectionAttribute];
 
     return additional;
 }
@@ -977,6 +980,8 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
         NSAccessibilityHighestEditableAncestorAttribute,
         NSAccessibilityTextInputMarkedRangeAttribute,
         NSAccessibilityTextInputMarkedTextMarkerRangeAttribute,
+        NSAccessibilityVisibleCharacterRangeAttribute,
+        NSAccessibilityRelativeFrameAttribute,
     ];
     static NeverDestroyed spinButtonCommonAttributes = [] {
         auto tempArray = adoptNS([[NSMutableArray alloc] initWithArray:attributes.get().get()]);
@@ -1020,7 +1025,6 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
         [tempArray addObject:NSAccessibilityNumberOfCharactersAttribute];
         [tempArray addObject:NSAccessibilitySelectedTextAttribute];
         [tempArray addObject:NSAccessibilitySelectedTextRangeAttribute];
-        [tempArray addObject:NSAccessibilityVisibleCharacterRangeAttribute];
         [tempArray addObject:NSAccessibilityInsertionPointLineNumberAttribute];
         [tempArray addObject:NSAccessibilityAccessKeyAttribute];
         [tempArray addObject:NSAccessibilityRequiredAttribute];
@@ -1031,6 +1035,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
     }();
     static NeverDestroyed listAttrs = [] {
         auto tempArray = adoptNS([[NSMutableArray alloc] initWithArray:attributes.get().get()]);
+        [tempArray addObject:NSAccessibilityActiveElementAttribute];
         [tempArray addObject:NSAccessibilitySelectedChildrenAttribute];
         [tempArray addObject:NSAccessibilityVisibleChildrenAttribute];
         [tempArray addObject:NSAccessibilityOrientationAttribute];
@@ -1235,7 +1240,6 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
     static NeverDestroyed staticTextAttrs = [] {
         auto tempArray = adoptNS([[NSMutableArray alloc] initWithArray:attributes.get().get()]);
         [tempArray addObject:NSAccessibilityIntersectionWithSelectionRangeAttribute];
-        [tempArray addObject:NSAccessibilityVisibleCharacterRangeAttribute];
         return tempArray;
     }();
 
@@ -1656,10 +1660,14 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
         return makeNSArray(backingObject->children());
     }
 
-    if ([attributeName isEqualToString: NSAccessibilitySelectedChildrenAttribute]) {
-        if (backingObject->canHaveSelectedChildren())
-            return makeNSArray(backingObject->selectedChildren());
-        return nil;
+    if ([attributeName isEqualToString:NSAccessibilitySelectedChildrenAttribute]) {
+        auto selectedChildren = backingObject->selectedChildren();
+        return selectedChildren ? makeNSArray(*selectedChildren) : nil;
+    }
+
+    if ([attributeName isEqualToString:NSAccessibilityActiveElementAttribute]) {
+        RefPtr activeDescendant = backingObject->activeDescendant();
+        return activeDescendant ? activeDescendant->wrapper() : nil;
     }
 
     if ([attributeName isEqualToString: NSAccessibilityVisibleChildrenAttribute]) {
@@ -1876,8 +1884,10 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
             || [attributeName isEqualToString:NSAccessibilityVisibleColumnsAttribute])
             return makeNSArray(backingObject->columns());
 
-        if ([attributeName isEqualToString:NSAccessibilitySelectedRowsAttribute])
-            return makeNSArray(backingObject->selectedChildren());
+        if ([attributeName isEqualToString:NSAccessibilitySelectedRowsAttribute]) {
+            auto selectedChildren = backingObject->selectedChildren();
+            return selectedChildren ? makeNSArray(*selectedChildren) : nil;
+        }
 
         // HTML tables don't support this attribute yet.
         if ([attributeName isEqualToString:NSAccessibilitySelectedColumnsAttribute])
@@ -1953,8 +1963,10 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
     }
 
     if (backingObject->isTree()) {
-        if ([attributeName isEqualToString:NSAccessibilitySelectedRowsAttribute])
-            return makeNSArray(backingObject->selectedChildren());
+        if ([attributeName isEqualToString:NSAccessibilitySelectedRowsAttribute]) {
+            auto selectedChildren = backingObject->selectedChildren();
+            return selectedChildren ? makeNSArray(*selectedChildren) : nil;
+        }
 
         if ([attributeName isEqualToString:NSAccessibilityRowsAttribute]) {
             AccessibilityObject::AccessibilityChildrenVector rowsCopy;
@@ -3566,11 +3578,11 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
     }
 
     if ([attribute isEqualToString:AXAttributedStringForTextMarkerRangeAttribute])
-        return [self attributedStringForTextMarkerRange:textMarkerRange spellCheck:AXCoreObject::SpellCheck::Yes];
+        return attributedStringForTextMarkerRange(*backingObject, textMarkerRange, AXCoreObject::SpellCheck::Yes);
 
     if ([attribute isEqualToString:AXAttributedStringForTextMarkerRangeWithOptionsAttribute]) {
         if (textMarkerRange)
-            return [self attributedStringForTextMarkerRange:textMarkerRange spellCheck:AXCoreObject::SpellCheck::No];
+            return attributedStringForTextMarkerRange(*backingObject, textMarkerRange, AXCoreObject::SpellCheck::No);
 
         if (dictionary) {
             AXTextMarkerRangeRef textMarkerRange = nil;
@@ -3582,7 +3594,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
             parameter = [dictionary objectForKey:@"AXSpellCheck"];
             if ([parameter isKindOfClass:[NSNumber class]] && [parameter boolValue])
                 spellCheck = AXCoreObject::SpellCheck::Yes;
-            return [self attributedStringForTextMarkerRange:textMarkerRange spellCheck:spellCheck];
+            return attributedStringForTextMarkerRange(*backingObject, textMarkerRange, spellCheck);
         }
 
         return nil;

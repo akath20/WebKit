@@ -198,17 +198,13 @@ static id attributeValue(id element, NSString *attribute)
         @"AXOrientation",
         @"AXOwns",
         @"AXPopupValue",
-        @"AXRelativeFrame",
         @"AXRequired",
-        @"AXSortDirection",
         @"AXValue",
-        @"AXVisibleCharacterRange",
     ];
 
     NSArray<NSString *> *supportedAttributes = [element accessibilityAttributeNames];
     if (![supportedAttributes containsObject:attribute] && ![internalAttributes.get() containsObject:attribute] && ![attribute isEqualToString:NSAccessibilityRoleAttribute])
         return nil;
-
     return [element accessibilityAttributeValue:attribute];
 }
 
@@ -521,7 +517,7 @@ unsigned AccessibilityUIElement::indexOfChild(AccessibilityUIElement* element)
     return index;
 }
 
-RefPtr<AccessibilityUIElement> AccessibilityUIElement::elementForAttribute(NSString* attribute) const
+RefPtr<AccessibilityUIElement> AccessibilityUIElement::elementForAttribute(NSString *attribute) const
 {
     auto element = attributeValue(attribute);
     return element ? AccessibilityUIElement::create(element.get()) : RefPtr<AccessibilityUIElement>();
@@ -636,6 +632,21 @@ RefPtr<AccessibilityUIElement> AccessibilityUIElement::disclosedRowAtIndex(unsig
 RefPtr<AccessibilityUIElement> AccessibilityUIElement::rowAtIndex(unsigned index)
 {
     return elementForAttributeAtIndex(NSAccessibilityRowsAttribute, index);
+}
+
+RefPtr<AccessibilityUIElement> AccessibilityUIElement::activeElement() const
+{
+    return elementForAttribute(@"AXActiveElement");
+}
+
+JSValueRef AccessibilityUIElement::selectedChildren() const
+{
+    BEGIN_AX_OBJC_EXCEPTIONS
+    auto children = attributeValue(NSAccessibilitySelectedChildrenAttribute);
+    if ([children isKindOfClass:NSArray.class])
+        return makeJSArray(makeVector<RefPtr<AccessibilityUIElement>>(children.get()));
+    END_AX_OBJC_EXCEPTIONS
+    return makeJSArray({ });
 }
 
 RefPtr<AccessibilityUIElement> AccessibilityUIElement::selectedChildAtIndex(unsigned index) const

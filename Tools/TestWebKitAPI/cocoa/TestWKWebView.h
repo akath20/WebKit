@@ -108,6 +108,7 @@ struct AutocorrectionContext {
 - (void)synchronouslyLoadRequest:(NSURLRequest *)request preferences:(WKWebpagePreferences *)preferences;
 - (void)synchronouslyLoadRequestIgnoringSSLErrors:(NSURLRequest *)request;
 - (void)synchronouslyLoadTestPageNamed:(NSString *)pageName;
+- (void)synchronouslyLoadTestPageNamed:(NSString *)pageName preferences:(WKWebpagePreferences *)preferences;
 - (BOOL)_synchronouslyExecuteEditCommand:(NSString *)command argument:(NSString *)argument;
 - (void)expectElementTagsInOrder:(NSArray<NSString *> *)tagNames;
 - (void)expectElementCount:(NSInteger)count querySelector:(NSString *)querySelector;
@@ -195,6 +196,7 @@ struct AutocorrectionContext {
 - (NSWindow *)hostWindow;
 - (void)typeCharacter:(char)character modifiers:(NSEventModifierFlags)modifiers;
 - (void)typeCharacter:(char)character;
+- (void)sendKey:(NSString *)characters code:(unsigned short)keyCode isDown:(BOOL)isDown modifiers:(NSEventModifierFlags)modifiers;
 - (void)setEventTimestampOffset:(NSTimeInterval)offset;
 @property (nonatomic, readonly) NSArray<NSString *> *collectLogsForNewConnections;
 @property (nonatomic, readonly) NSTimeInterval eventTimestamp;

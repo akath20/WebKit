@@ -75,9 +75,8 @@ void WebAssemblyModuleRecord::finishCreation(JSGlobalObject* globalObject, VM& v
 {
     Base::finishCreation(globalObject, vm);
     ASSERT(inherits(info()));
-    for (const auto& exp : moduleInformation.exports) {
-        auto fieldString = String::fromUTF8(exp.field);
-        Identifier field = Identifier::fromString(vm, fieldString.isNull() ? emptyString() : fieldString);
+    for (auto& exp : moduleInformation.exports) {
+        auto field = Identifier::fromString(vm, makeAtomString(exp.field));
         addExportEntry(ExportEntry::createLocal(field, field));
     }
 }
@@ -132,17 +131,12 @@ void WebAssemblyModuleRecord::initializeImports(JSGlobalObject* globalObject, JS
     };
 
     auto importFailMessage = [&] (const Wasm::Import& import, const char* before, const char* after) {
-        return makeString(before, ' ', String::fromUTF8(import.module), ':', String::fromUTF8(import.field), ' ', after);
-    };
-
-    auto stringFromUTF8 = [](auto& span) {
-        auto string = String::fromUTF8(span);
-        return string.isNull() ? emptyString() : string;
+        return makeString(before, ' ', import.module, ':', import.field, ' ', after);
     };
 
     for (const auto& import : moduleInformation.imports) {
-        Identifier moduleName = Identifier::fromString(vm, stringFromUTF8(import.module));
-        Identifier fieldName = Identifier::fromString(vm, stringFromUTF8(import.field));
+        Identifier moduleName = Identifier::fromString(vm, makeAtomString(import.module));
+        Identifier fieldName = Identifier::fromString(vm, makeAtomString(import.field));
         JSValue value;
         if (creationMode == Wasm::CreationMode::FromJS) {
             // 1. Let o be the resultant value of performing Get(importObject, i.module_name).
@@ -516,7 +510,7 @@ void WebAssemblyModuleRecord::initializeExports(JSGlobalObject* globalObject)
             //     a. Let func be an Exported Function Exotic Object created from c.
             //     b. Append func to funcs.
             //     c. Return func.
-            Wasm::Callee& jsEntrypointCallee = calleeGroup->jsEntrypointCalleeFromFunctionIndexSpace(functionIndexSpace);
+            auto& jsEntrypointCallee = calleeGroup->jsEntrypointCalleeFromFunctionIndexSpace(functionIndexSpace);
             auto* wasmCallee = calleeGroup->wasmCalleeFromFunctionIndexSpace(functionIndexSpace);
             Wasm::WasmToWasmImportableFunction::LoadLocation entrypointLoadLocation = calleeGroup->entrypointLoadLocationFromFunctionIndexSpace(functionIndexSpace);
             Wasm::TypeIndex typeIndex = module->typeIndexFromFunctionIndexSpace(functionIndexSpace);
@@ -734,8 +728,7 @@ void WebAssemblyModuleRecord::initializeExports(JSGlobalObject* globalObject)
         }
         }
 
-        String fieldString = String::fromUTF8(exp.field);
-        Identifier propertyName = Identifier::fromString(vm, fieldString.isNull() ? emptyString() : fieldString);
+        auto propertyName = Identifier::fromString(vm, makeAtomString(exp.field));
 
         bool shouldThrowReadOnlyError = false;
         bool ignoreReadOnlyErrors = true;
@@ -767,7 +760,7 @@ void WebAssemblyModuleRecord::initializeExports(JSGlobalObject* globalObject)
             JSObject* startFunction = m_instance->instance().importFunction(startFunctionIndexSpace).get();
             m_startFunction.set(vm, this, startFunction);
         } else {
-            Wasm::Callee& jsEntrypointCallee = calleeGroup->jsEntrypointCalleeFromFunctionIndexSpace(startFunctionIndexSpace);
+            auto& jsEntrypointCallee = calleeGroup->jsEntrypointCalleeFromFunctionIndexSpace(startFunctionIndexSpace);
             auto* wasmCallee = calleeGroup->wasmCalleeFromFunctionIndexSpace(startFunctionIndexSpace);
             Wasm::WasmToWasmImportableFunction::LoadLocation entrypointLoadLocation = calleeGroup->entrypointLoadLocationFromFunctionIndexSpace(startFunctionIndexSpace);
             WebAssemblyFunction* function = WebAssemblyFunction::create(vm, globalObject, globalObject->webAssemblyFunctionStructure(), signature.argumentCount(), "start"_s, m_instance.get(), jsEntrypointCallee, wasmCallee, entrypointLoadLocation, typeIndex, Wasm::TypeInformation::getCanonicalRTT(typeIndex));

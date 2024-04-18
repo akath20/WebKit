@@ -453,6 +453,16 @@ void WebAuthenticatorCoordinatorProxy::makeActiveConditionalAssertion()
     }
 }
 
+inline static Vector<AuthenticatorTransport> toTransports(NSArray<ASAuthorizationSecurityKeyPublicKeyCredentialDescriptorTransport> *asTransports)
+{
+    Vector<AuthenticatorTransport> transports;
+    for (ASAuthorizationSecurityKeyPublicKeyCredentialDescriptorTransport asTransport : asTransports) {
+        if (auto transport = convertStringToAuthenticatorTransport(asTransport))
+            transports.append(*transport);
+    }
+    return transports;
+}
+
 #endif // HAVE(WEB_AUTHN_AS_MODERN)
 
 void WebAuthenticatorCoordinatorProxy::performRequest(WebAuthenticationRequestData &&requestData, RequestCompletionHandler &&handler)
@@ -487,16 +497,35 @@ void WebAuthenticatorCoordinatorProxy::performRequest(WebAuthenticationRequestDa
             WebCore::AuthenticatorAttachment attachment = AuthenticatorAttachment::Platform;
             if ([error.get().domain isEqualToString:WKErrorDomain])
                 exceptionData = { toExceptionCode(error.get().code), error.get().userInfo[NSLocalizedDescriptionKey] };
-            else if ([error.get().domain isEqualToString:ASAuthorizationErrorDomain] && error.get().code == ASAuthorizationErrorFailed && error.get().userInfo[NSUnderlyingErrorKey]) {
-                RetainPtr<NSError> underlyingError = retainPtr(error.get().userInfo[NSUnderlyingErrorKey]);
-                if ([underlyingError.get().domain isEqualToString:ASCAuthorizationErrorDomain] && underlyingError.get().code == ASCAuthorizationErrorSecurityError)
-                    exceptionData = { ExceptionCode::SecurityError, underlyingError.get().userInfo[NSLocalizedFailureReasonErrorKey] };
+            else if ([error.get().domain isEqualToString:ASAuthorizationErrorDomain]) {
+                switch (error.get().code) {
+                case ASAuthorizationErrorFailed: {
+                    RetainPtr<NSError> underlyingError = retainPtr(error.get().userInfo[NSUnderlyingErrorKey]);
+                    if ([underlyingError.get().domain isEqualToString:ASCAuthorizationErrorDomain] && underlyingError.get().code == ASCAuthorizationErrorSecurityError)
+                        exceptionData = { ExceptionCode::SecurityError, underlyingError.get().userInfo[NSLocalizedFailureReasonErrorKey] };
+                    else if ([underlyingError.get().domain isEqualToString:WKErrorDomain])
+                        exceptionData = { toExceptionCode(underlyingError.get().code), underlyingError.get().userInfo[NSLocalizedDescriptionKey] };
+                    break;
+                }
+                case ASAuthorizationErrorMatchedExcludedCredential:
+                    exceptionData = { ExceptionCode::InvalidStateError, @"" };
+                    break;
+                case ASAuthorizationErrorCanceled:
+                    exceptionData = { ExceptionCode::NotAllowedError, @"" };
+                    break;
+                case ASAuthorizationErrorUnknown:
+                case ASAuthorizationErrorInvalidResponse:
+                case ASAuthorizationErrorNotHandled:
+                case ASAuthorizationErrorNotInteractive:
+                    ASSERT_NOT_REACHED();
+                    break;
+                }
             } else if ([auth.get().credential isKindOfClass:getASAuthorizationPlatformPublicKeyCredentialRegistrationClass()]) {
                 response.isAuthenticatorAttestationResponse = true;
                 auto credential = retainPtr((ASAuthorizationPlatformPublicKeyCredentialRegistration *)auth.get().credential);
                 response.rawId = toArrayBuffer(credential.get().credentialID);
                 response.attestationObject = toArrayBuffer(credential.get().rawAttestationObject);
-                response.transports = { };
+                response.transports = { AuthenticatorTransport::Internal, AuthenticatorTransport::Hybrid };
                 response.clientDataJSON = toArrayBuffer(credential.get().rawClientDataJSON);
 
                 bool hasExtensionOutput = false;
@@ -537,7 +566,10 @@ void WebAuthenticatorCoordinatorProxy::performRequest(WebAuthenticationRequestDa
                 response.isAuthenticatorAttestationResponse = true;
                 response.rawId = toArrayBuffer(credential.get().credentialID);
                 response.attestationObject = toArrayBuffer(credential.get().rawAttestationObject);
-                response.transports = { };
+                if ([credential respondsToSelector:@selector(transports)])
+                    response.transports = toTransports(credential.get().transports);
+                else
+                    response.transports = { };
                 response.clientDataJSON = toArrayBuffer(credential.get().rawClientDataJSON);
             } else if ([auth.get().credential isKindOfClass:getASAuthorizationSecurityKeyPublicKeyCredentialAssertionClass()]) {
                 auto credential = retainPtr((ASAuthorizationSecurityKeyPublicKeyCredentialAssertion *)auth.get().credential);

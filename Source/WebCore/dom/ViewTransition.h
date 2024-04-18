@@ -155,7 +155,7 @@ public:
 private:
     ViewTransition(Document&, RefPtr<ViewTransitionUpdateCallback>&&);
 
-    Ref<MutableStyleProperties> copyElementBaseProperties(Element&, const LayoutSize&);
+    Ref<MutableStyleProperties> copyElementBaseProperties(Element&, LayoutSize&);
 
     ExceptionOr<void> updatePseudoElementStyles();
     void setupDynamicStyleSheet(const AtomString&, const CapturedElement&);
@@ -164,6 +164,7 @@ private:
 
     OrderedNamedElementsMap m_namedElements;
     ViewTransitionPhase m_phase { ViewTransitionPhase::PendingCapture };
+    FloatSize m_initialLargeViewportSize;
 
     RefPtr<ViewTransitionUpdateCallback> m_updateCallback;
 
@@ -171,8 +172,7 @@ private:
     PromiseAndWrapper m_ready;
     PromiseAndWrapper m_updateCallbackDone;
     PromiseAndWrapper m_finished;
-
-    FloatSize m_initialSnapshotContainingBlockSize;
+    EventLoopTimerHandle m_updateCallbackTimeout;
 };
 
 }

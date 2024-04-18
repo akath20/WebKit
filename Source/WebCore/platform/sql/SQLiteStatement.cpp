@@ -32,6 +32,7 @@
 #include <sqlite3.h>
 #include <variant>
 #include <wtf/Assertions.h>
+#include <wtf/StdLibExtras.h>
 #include <wtf/text/StringView.h>
 
 // SQLite 3.6.16 makes sqlite3_prepare_v2 automatically retry preparing the statement
@@ -107,13 +108,13 @@ int SQLiteStatement::bindBlob(int index, const String& text)
     // treats as a null, so we supply a non-null pointer for that case.
     auto upconvertedCharacters = StringView(text).upconvertedCharacters();
     UChar anyCharacter = 0;
-    const UChar* characters;
+    std::span<const UChar> characters;
     if (text.isEmpty() && !text.isNull())
-        characters = &anyCharacter;
+        characters = span(anyCharacter);
     else
-        characters = upconvertedCharacters;
+        characters = upconvertedCharacters.span();
 
-    return bindBlob(index, std::span(reinterpret_cast<const uint8_t*>(characters), text.length() * sizeof(UChar)));
+    return bindBlob(index, asBytes(characters));
 }
 
 int SQLiteStatement::bindText(int index, StringView text)
@@ -283,7 +284,7 @@ String SQLiteStatement::columnBlobAsString(int col)
         return String();
 
     ASSERT(!(size % sizeof(UChar)));
-    return StringImpl::create8BitIfPossible(static_cast<const UChar*>(blob), size / sizeof(UChar));
+    return StringImpl::create8BitIfPossible({ static_cast<const UChar*>(blob), size / sizeof(UChar) });
 }
 
 Vector<uint8_t> SQLiteStatement::columnBlob(int col)

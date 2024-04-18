@@ -43,6 +43,8 @@
 #import <WebCore/PlaybackSessionInterfaceAVKit.h>
 #import <WebCore/VideoPresentationInterfaceAVKit.h>
 #import <pal/spi/cocoa/AVKitSPI.h>
+#import <wtf/CheckedRef.h>
+#import <wtf/FastMalloc.h>
 #import <wtf/MonotonicTime.h>
 #import <wtf/RetainPtr.h>
 #import <wtf/WeakObjCPtr.h>
@@ -61,7 +63,9 @@ static const Seconds bannerMinimumHideDelay = 1_s;
 
 @class WKFullscreenStackView;
 
-class WKFullScreenViewControllerPlaybackSessionModelClient : WebCore::PlaybackSessionModelClient {
+class WKFullScreenViewControllerPlaybackSessionModelClient final : WebCore::PlaybackSessionModelClient, public CanMakeCheckedPtr<WKFullScreenViewControllerPlaybackSessionModelClient> {
+    WTF_MAKE_FAST_ALLOCATED;
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(WKFullScreenViewControllerPlaybackSessionModelClient);
 public:
     void setParent(WKFullScreenViewController *parent) { m_parent = parent; }
 
@@ -94,6 +98,12 @@ public:
     }
 
 private:
+    // CheckedPtr interface
+    uint32_t ptrCount() const final { return CanMakeCheckedPtr::ptrCount(); }
+    uint32_t ptrCountWithoutThreadCheck() const final { return CanMakeCheckedPtr::ptrCountWithoutThreadCheck(); }
+    void incrementPtrCount() const final { CanMakeCheckedPtr::incrementPtrCount(); }
+    void decrementPtrCount() const final { CanMakeCheckedPtr::decrementPtrCount(); }
+
     WeakObjCPtr<WKFullScreenViewController> m_parent;
     RefPtr<WebCore::PlaybackSessionInterfaceIOS> m_interface;
 };
@@ -562,7 +572,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     auto alternateFullScreenControlDesignEnabled = self._webView._page->preferences().alternateFullScreenControlDesignEnabled();
     
     if (alternateFullScreenControlDesignEnabled) {
-        buttonSize = CGSizeMake(48.0, 48.0);
+        buttonSize = CGSizeMake(44.0, 44.0);
         doneImage = [UIImage systemImageNamed:@"arrow.down.right.and.arrow.up.left"];
         startPiPImage = nil;
         stopPiPImage = nil;
@@ -589,8 +599,6 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 
     if (alternateFullScreenControlDesignEnabled) {
         UIButtonConfiguration *cancelButtonConfiguration = [UIButtonConfiguration filledButtonConfiguration];
-        // FIXME: this color specification should not be necessary.
-        cancelButtonConfiguration.baseBackgroundColor = [UIColor colorWithWhite:1.0 alpha:0.15];
         [_cancelButton setConfiguration:cancelButtonConfiguration];
 
 #if PLATFORM(VISION)

@@ -23,10 +23,10 @@
 #include <wtf/text/WTFString.h>
 
 #include <wtf/ASCIICType.h>
-#include <wtf/Algorithms.h>
 #include <wtf/DataLog.h>
 #include <wtf/HexNumber.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/StdLibExtras.h>
 #include <wtf/Vector.h>
 #include <wtf/dtoa.h>
 #include <wtf/text/CString.h>
@@ -381,35 +381,29 @@ CString String::ascii() const
     // Printable ASCII characters 32..127 and the null character are
     // preserved, characters outside of this range are converted to '?'.
 
-    unsigned length = this->length();
-    if (!length) { 
+    if (isEmpty()) {
         char* characterBuffer;
-        return CString::newUninitialized(length, characterBuffer);
+        return CString::newUninitialized(0, characterBuffer);
     }
 
     if (this->is8Bit()) {
-        const LChar* characters = this->characters8();
+        auto characters = this->span8();
 
         char* characterBuffer;
-        CString result = CString::newUninitialized(length, characterBuffer);
+        CString result = CString::newUninitialized(characters.size(), characterBuffer);
 
-        for (unsigned i = 0; i < length; ++i) {
-            LChar ch = characters[i];
-            characterBuffer[i] = ch && (ch < 0x20 || ch > 0x7f) ? '?' : ch;
-        }
+        for (auto character : characters)
+            *characterBuffer++ = character && (character < 0x20 || character > 0x7f) ? '?' : character;
 
         return result;        
     }
 
-    const UChar* characters = this->characters16();
-
+    auto characters = span16();
     char* characterBuffer;
-    CString result = CString::newUninitialized(length, characterBuffer);
+    CString result = CString::newUninitialized(characters.size(), characterBuffer);
 
-    for (unsigned i = 0; i < length; ++i) {
-        UChar ch = characters[i];
-        characterBuffer[i] = ch && (ch < 0x20 || ch > 0x7f) ? '?' : ch;
-    }
+    for (auto character : characters)
+        *characterBuffer++ = character && (character < 0x20 || character > 0x7f) ? '?' : character;
 
     return result;
 }
@@ -419,30 +413,25 @@ CString String::latin1() const
     // Basic Latin1 (ISO) encoding - Unicode characters 0..255 are
     // preserved, characters outside of this range are converted to '?'.
 
-    unsigned length = this->length();
-
-    if (!length)
-        return CString("", 0);
+    if (isEmpty())
+        return ""_span;
 
     if (is8Bit())
-        return CString(this->characters8(), length);
+        return CString(this->span8());
 
-    const UChar* characters = this->characters16();
-
+    auto characters = this->span16();
     char* characterBuffer;
-    CString result = CString::newUninitialized(length, characterBuffer);
+    CString result = CString::newUninitialized(characters.size(), characterBuffer);
 
-    for (unsigned i = 0; i < length; ++i) {
-        UChar ch = characters[i];
-        characterBuffer[i] = !isLatin1(ch) ? '?' : ch;
-    }
+    for (auto character : characters)
+        *characterBuffer++ = !isLatin1(character) ? '?' : character;
 
     return result;
 }
 
 Expected<CString, UTF8ConversionError> String::tryGetUTF8(ConversionMode mode) const
 {
-    return m_impl ? m_impl->tryGetUTF8(mode) : CString { "", 0 };
+    return m_impl ? m_impl->tryGetUTF8(mode) : CString { ""_span };
 }
 
 Expected<CString, UTF8ConversionError> String::tryGetUTF8() const
@@ -461,7 +450,7 @@ String String::make8Bit(std::span<const UChar> source)
 {
     LChar* destination;
     String result = String::createUninitialized(source.size(), destination);
-    StringImpl::copyCharacters(destination, source.data(), source.size());
+    StringImpl::copyCharacters(destination, source);
     return result;
 }
 
@@ -469,10 +458,9 @@ void String::convertTo16Bit()
 {
     if (isNull() || !is8Bit())
         return;
-    auto length = this->length();
     UChar* destination;
-    auto convertedString = String::createUninitialized(length, destination);
-    StringImpl::copyCharacters(destination, characters8(), length);
+    auto convertedString = String::createUninitialized(length(), destination);
+    StringImpl::copyCharacters(destination, span8());
     *this = WTFMove(convertedString);
 }
 
@@ -492,12 +480,11 @@ String fromUTF8Impl(std::span<const LChar> string)
     UChar* bufferStart = buffer.data();
  
     UChar* bufferCurrent = bufferStart;
-    const char* stringCurrent = reinterpret_cast<const char*>(string.data());
     constexpr auto function = replaceInvalidSequences ? convertUTF8ToUTF16ReplacingInvalidSequences : convertUTF8ToUTF16;
-    if (!function(stringCurrent, reinterpret_cast<const char*>(string.data() + string.size()), &bufferCurrent, bufferCurrent + buffer.size(), nullptr))
+    if (!function(spanReinterpretCast<const char8_t>(string), &bufferCurrent, bufferCurrent + buffer.size(), nullptr))
         return String();
 
-    unsigned utf16Length = bufferCurrent - bufferStart;
+    size_t utf16Length = bufferCurrent - bufferStart;
     RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(utf16Length <= string.size());
     return StringImpl::create(std::span { bufferStart, utf16Length });
 }
@@ -552,7 +539,7 @@ static inline double toDoubleType(std::span<const CharacterType> data, bool* ok,
     while (leadingSpacesLength < data.size() && isUnicodeCompatibleASCIIWhitespace(data[leadingSpacesLength]))
         ++leadingSpacesLength;
 
-    double number = parseDouble(data.data() + leadingSpacesLength, data.size() - leadingSpacesLength, parsedLength);
+    double number = parseDouble(data.subspan(leadingSpacesLength), parsedLength);
     if (!parsedLength) {
         if (ok)
             *ok = false;

@@ -151,8 +151,9 @@ struct ScrollRectToVisibleOptions {
 
 using ScrollingScope = uint64_t;
 
-class RenderLayer : public CanMakeSingleThreadWeakPtr<RenderLayer>, public CanMakeCheckedPtr {
+class RenderLayer final : public CanMakeSingleThreadWeakPtr<RenderLayer>, public CanMakeCheckedPtr<RenderLayer> {
     WTF_MAKE_ISO_ALLOCATED(RenderLayer);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderLayer);
 public:
     friend class RenderReplica;
     friend class RenderLayerFilters;
@@ -882,6 +883,8 @@ public:
     void setIsHiddenByOverflowTruncation(bool);
 
     void paintSVGResourceLayer(GraphicsContext&, const AffineTransform& contentTransform);
+
+    bool ancestorLayerIsDOMParent(const RenderLayer* ancestor) const;
 
 private:
 

@@ -34,6 +34,7 @@
 #import "WKSLinearMediaTypes.h"
 #import <UIKit/UIKit.h>
 #import <WebCore/WebAVPlayerLayerView.h>
+#import <wtf/BlockPtr.h>
 
 namespace WebKit {
 
@@ -64,10 +65,8 @@ void VideoPresentationInterfaceLMK::setupFullscreen(UIView& videoView, const Flo
 
 void VideoPresentationInterfaceLMK::setupPlayerViewController()
 {
-    linearMediaPlayer().allowFullScreenFromInline = YES;
     linearMediaPlayer().captionLayer = captionsLayer();
     linearMediaPlayer().contentType = WKSLinearMediaContentTypePlanar;
-    linearMediaPlayer().presentationMode = WKSLinearMediaPresentationModeInline;
 
     ensurePlayableViewController();
 }
@@ -79,16 +78,14 @@ void VideoPresentationInterfaceLMK::invalidatePlayerViewController()
 
 void VideoPresentationInterfaceLMK::presentFullscreen(bool animated, Function<void(BOOL, NSError *)>&& completionHandler)
 {
-    linearMediaPlayer().presentationMode = WKSLinearMediaPresentationModeFullscreenFromInline;
-    // FIXME: Wait until -linearMediaPlayer:didEnterFullscreenWithError: is called before calling completionHandler
-    completionHandler(YES, nil);
+    playbackSessionInterface().startObservingNowPlayingMetadata();
+    [linearMediaPlayer() enterFullscreenWithCompletionHandler:makeBlockPtr(WTFMove(completionHandler)).get()];
 }
 
 void VideoPresentationInterfaceLMK::dismissFullscreen(bool animated, Function<void(BOOL, NSError *)>&& completionHandler)
 {
-    linearMediaPlayer().presentationMode = WKSLinearMediaPresentationModeInline;
-    // FIXME: Wait until -linearMediaPlayer:didExitFullscreenWithError: is called before calling completionHandler
-    completionHandler(YES, nil);
+    playbackSessionInterface().stopObservingNowPlayingMetadata();
+    [linearMediaPlayer() exitFullscreenWithCompletionHandler:makeBlockPtr(WTFMove(completionHandler)).get()];
 }
 
 UIViewController *VideoPresentationInterfaceLMK::playerViewController() const

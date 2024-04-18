@@ -35,10 +35,8 @@
 #include "RemoteAudioSessionIdentifier.h"
 #include "RemoteGPU.h"
 #include "RemoteRemoteCommandListenerIdentifier.h"
-#include "RemoteSerializedImageBufferIdentifier.h"
 #include "RenderingBackendIdentifier.h"
 #include "ScopedActiveMessageReceiveQueue.h"
-#include "ThreadSafeObjectHeap.h"
 #include "WebGPUIdentifier.h"
 #include <WebCore/ImageBuffer.h>
 #include <WebCore/IntDegrees.h>
@@ -107,6 +105,7 @@ class RemoteMediaSessionHelperProxy;
 class RemoteRemoteCommandListenerProxy;
 class RemoteRenderingBackend;
 class RemoteSampleBufferDisplayLayerManager;
+class RemoteSharedResourceCache;
 class UserMediaCaptureManagerProxy;
 struct GPUProcessConnectionParameters;
 struct MediaOverridesForTesting;
@@ -141,6 +140,7 @@ public:
 
     bool isWebGPUEnabled() const { return m_preferences.isWebGPUEnabled; }
     bool isWebGLEnabled() const { return m_preferences.isWebGLEnabled; }
+    bool isWebXREnabled() const { return m_preferences.isWebXREnabled; }
 
 #if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
     bool isDynamicContentScalingEnabled() const { return m_preferences.isDynamicContentScalingEnabled; }
@@ -155,6 +155,7 @@ public:
     IPC::MessageReceiverMap& messageReceiverMap() { return m_messageReceiverMap; }
     GPUProcess& gpuProcess() { return m_gpuProcess.get(); }
     WebCore::ProcessIdentifier webProcessIdentifier() const { return m_webProcessIdentifier; }
+    Ref<RemoteSharedResourceCache> sharedResourceCache();
 
 #if ENABLE(VIDEO)
     RemoteMediaResourceManager& remoteMediaResourceManager();
@@ -163,6 +164,8 @@ public:
     PAL::SessionID sessionID() const { return m_sessionID; }
 
     bool isLockdownModeEnabled() const { return m_isLockdownModeEnabled; }
+    bool isLockdownSafeFontParserEnabled() const { return m_preferences.isLockdownSafeFontParserEnabled; }
+
     bool allowTestOnlyIPC() const { return m_preferences.allowTestOnlyIPC; }
 
     Logger& logger();
@@ -227,8 +230,6 @@ public:
 
     void lowMemoryHandler(WTF::Critical, WTF::Synchronous);
 
-    IPC::ThreadSafeObjectHeap<RemoteSerializedImageBufferIdentifier, RefPtr<WebCore::ImageBuffer>>& serializedImageBufferHeap() { return m_remoteSerializedImageBufferObjectHeap; }
-
 #if ENABLE(WEBGL)
     void releaseGraphicsContextGLForTesting(GraphicsContextGLIdentifier);
 #endif
@@ -273,7 +274,6 @@ private:
 
     void createRenderingBackend(RemoteRenderingBackendCreationParameters&&, IPC::StreamServerConnection::Handle&&);
     void releaseRenderingBackend(RenderingBackendIdentifier);
-    void releaseSerializedImageBuffer(WebCore::RenderingResourceIdentifier);
 
 #if ENABLE(WEBGL)
     void createGraphicsContextGL(WebCore::GraphicsContextGLAttributes, GraphicsContextGLIdentifier, RenderingBackendIdentifier, IPC::StreamServerConnection::Handle&&);
@@ -349,6 +349,7 @@ private:
 #if ENABLE(WEB_AUDIO)
     std::unique_ptr<RemoteAudioDestinationManager> m_remoteAudioDestinationManager;
 #endif
+    RefPtr<RemoteSharedResourceCache> m_sharedResourceCache;
 #if ENABLE(VIDEO)
     RefPtr<RemoteMediaResourceManager> m_remoteMediaResourceManager WTF_GUARDED_BY_CAPABILITY(mainThread);
     UniqueRef<RemoteMediaPlayerManagerProxy> m_remoteMediaPlayerManagerProxy;
@@ -386,7 +387,6 @@ private:
     using RemoteGraphicsContextGLMap = HashMap<GraphicsContextGLIdentifier, IPC::ScopedActiveMessageReceiveQueue<RemoteGraphicsContextGL>>;
     RemoteGraphicsContextGLMap m_remoteGraphicsContextGLMap;
 #endif
-    IPC::ThreadSafeObjectHeap<RemoteSerializedImageBufferIdentifier, RefPtr<WebCore::ImageBuffer>> m_remoteSerializedImageBufferObjectHeap;
     using RemoteGPUMap = HashMap<WebGPUIdentifier, IPC::ScopedActiveMessageReceiveQueue<RemoteGPU>>;
     RemoteGPUMap m_remoteGPUMap;
 #if ENABLE(ENCRYPTED_MEDIA)

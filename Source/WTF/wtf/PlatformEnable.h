@@ -164,10 +164,6 @@
 #define ENABLE_CONTEXT_MENU_EVENT 1
 #endif
 
-#if !defined(ENABLE_CSS_PAINTING_API)
-#define ENABLE_CSS_PAINTING_API 1
-#endif
-
 #if !defined(ENABLE_CSS_TRANSFORM_STYLE_OPTIMIZED_3D)
 #define ENABLE_CSS_TRANSFORM_STYLE_OPTIMIZED_3D 0
 #endif
@@ -742,6 +738,10 @@
 #define ENABLE_WEBASSEMBLY 1
 #define ENABLE_WEBASSEMBLY_OMGJIT 1
 #define ENABLE_WEBASSEMBLY_BBQJIT 1
+#endif
+
+#if !defined(ENABLE_WEBASSEMBLY) && CPU(ADDRESS64) && PLATFORM(COCOA) && !ENABLE(C_LOOP)
+#define ENABLE_WEBASSEMBLY 1
 #endif
 
 /* The SamplingProfiler is the probabilistic and low-overhead profiler used by

@@ -114,6 +114,7 @@
 #import <WebCore/FloatQuad.h>
 #import <WebCore/FloatRect.h>
 #import <WebCore/FontAttributeChanges.h>
+#import <WebCore/FrameIdentifier.h>
 #import <WebCore/InputMode.h>
 #import <WebCore/KeyEventCodesIOS.h>
 #import <WebCore/KeyboardScroll.h>
@@ -211,10 +212,6 @@
 #endif
 
 #if USE(BROWSERENGINEKIT)
-
-// FIXME: Replace this with linker flags in WebKit.xcconfig once BrowserEngineKit
-// is available everywhere we require it.
-asm(".linker_option \"-framework\", \"BrowserEngineKit\"");
 
 @interface WKUITextSelectionRect : UITextSelectionRect
 + (instancetype)selectionRectWithCGRect:(CGRect)rect;
@@ -553,7 +550,7 @@ constexpr double fasterTapSignificantZoomThreshold = 0.8;
 
 @property (nonatomic) NSUInteger location;
 @property (nonatomic) NSUInteger length;
-@property (nonatomic, copy) NSString *frameIdentifier;
+@property (nonatomic) WebCore::FrameIdentifier frameIdentifier;
 @property (nonatomic) NSUInteger order;
 
 + (WKFoundTextRange *)foundTextRangeWithWebFoundTextRange:(WebKit::WebFoundTextRange)range;
@@ -6323,7 +6320,7 @@ static Vector<WebCore::CompositionHighlight> compositionHighlights(NSAttributedS
     _autocorrectionContextNeedsUpdate = YES;
     _candidateViewNeedsUpdate = !self.hasMarkedText && _isDeferringKeyEventsToInputMethod;
     _markedText = markedText;
-    _page->setCompositionAsync(markedText, underlines, highlights, { }, selectedRange, { });
+    _page->setCompositionAsync(markedText, underlines, highlights, selectedRange, { });
 }
 
 - (void)unmarkText
@@ -6904,11 +6901,7 @@ static UITextAutocapitalizationType toUITextAutocapitalize(WebCore::Autocapitali
     if (_focusedElementInformation.hasEverBeenPasswordField) {
         if ([privateTraits respondsToSelector:@selector(setLearnsCorrections:)])
             privateTraits.learnsCorrections = NO;
-#if USE(BROWSERENGINEKIT)
         extendedTraits.typingAdaptationEnabled = NO;
-#else
-        extendedTraits.typingAdaptationDisabled = YES;
-#endif
     }
 
     if ([privateTraits respondsToSelector:@selector(setShortcutConversionType:)])
@@ -11728,7 +11721,7 @@ static RetainPtr<NSItemProvider> createItemProvider(const WebKit::WebPageProxy& 
 }
 
 #if ENABLE(UNIFIED_TEXT_REPLACEMENT)
-- (void)addTextIndicatorStyleForID:(NSUUID *)uuid
+- (void)addTextIndicatorStyleForID:(NSUUID *)uuid withStyleType:(WKTextIndicatorStyleType)styleType
 {
     if (!_page->preferences().textIndicatorStylingEnabled())
         return;
@@ -11736,7 +11729,7 @@ static RetainPtr<NSItemProvider> createItemProvider(const WebKit::WebPageProxy& 
     if (!_textStyleManager)
         _textStyleManager = adoptNS([WebKit::allocWKSTextStyleManagerInstance() initWithDelegate:self]);
 
-    [_textStyleManager addTextIndicatorStyleForID:uuid];
+    [_textStyleManager addTextIndicatorStyleForID:uuid withStyleType:styleType];
 }
 
 - (void)removeTextIndicatorStyleForID:(NSUUID *)uuid
@@ -13047,7 +13040,10 @@ inline static NSString *extendSelectionCommand(UITextLayoutDirection direction)
     if (!_extendedTextInputTraits)
         _extendedTextInputTraits = adoptNS([WKExtendedTextInputTraits new]);
 
-    if (!_isBlurringFocusedElement)
+    if (!self._hasFocusedElement && !_isFocusingElementWithKeyboard) {
+        [_extendedTextInputTraits restoreDefaultValues];
+        [_extendedTextInputTraits setSelectionColorsToMatchTintColor:[self _cascadeInteractionTintColor]];
+    } else if (!_isBlurringFocusedElement)
         [self _updateTextInputTraits:_extendedTextInputTraits.get()];
 
     return _extendedTextInputTraits.get();
@@ -14663,7 +14659,6 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 
 - (void)dealloc
 {
-    [_frameIdentifier release];
     [super dealloc];
 }
 

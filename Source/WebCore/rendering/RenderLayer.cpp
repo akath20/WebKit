@@ -895,7 +895,11 @@ bool RenderLayer::canRender3DTransforms() const
 
 bool RenderLayer::paintsWithFilters() const
 {
-    if (!hasFilter())
+    const auto& filter = renderer().style().filter();
+    if (filter.isEmpty())
+        return false;
+
+    if (renderer().isRenderOrLegacyRenderSVGRoot() && filter.isReferenceFilter())
         return false;
 
     if (RenderLayerFilters::isIdentity(renderer()))
@@ -4080,18 +4084,20 @@ Ref<HitTestingTransformState> RenderLayer::createLocalTransformState(RenderLayer
     return transformState.releaseNonNull();
 }
 
-static bool parentLayerIsDOMParent(const RenderLayer& layer)
+bool RenderLayer::ancestorLayerIsDOMParent(const RenderLayer* ancestor) const
 {
-    if (!layer.parent())
+    if (!ancestor)
         return false;
-    if (!layer.renderer().element() || !layer.renderer().element()->parentElementInComposedTree())
-        return false;
-    return layer.parent()->renderer().element() == layer.renderer().element()->parentElementInComposedTree();
+    if (renderer().element() && ancestor->renderer().element() == renderer().element()->parentElementInComposedTree())
+        return true;
+
+    std::optional<PseudoId> parentPseudoId = parentPseudoElement(renderer().style().pseudoElementType());
+    return parentPseudoId && *parentPseudoId == ancestor->renderer().style().pseudoElementType();
 }
 
 bool RenderLayer::participatesInPreserve3D() const
 {
-    return parentLayerIsDOMParent(*this) && parent()->preserves3D() && (transform() || renderer().style().backfaceVisibility() == BackfaceVisibility::Hidden || preserves3D());
+    return ancestorLayerIsDOMParent(parent()) && parent()->preserves3D() && (transform() || renderer().style().backfaceVisibility() == BackfaceVisibility::Hidden || preserves3D());
 }
 
 // hitTestLocation and hitTestRect are relative to rootLayer.
@@ -5602,15 +5608,12 @@ void RenderLayer::clearLayerScrollableArea()
 
 void RenderLayer::updateFiltersAfterStyleChange(StyleDifference diff, const RenderStyle* oldStyle)
 {
-    if (!paintsWithFilters()) {
-        clearLayerFilters();
-        return;
-    }
-
     if (renderer().style().filter().hasReferenceFilter()) {
         ensureLayerFilters();
         m_filters->updateReferenceFilterClients(renderer().style().filter());
-    } else if (m_filters)
+    } else if (!paintsWithFilters())
+        clearLayerFilters();
+    else if (m_filters)
         m_filters->removeReferenceFilterClients();
 
     if (diff >= StyleDifference::RepaintLayer && oldStyle && oldStyle->filter() != renderer().style().filter())
