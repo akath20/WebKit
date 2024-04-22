@@ -371,7 +371,9 @@ void RenderText::styleDidChange(StyleDifference diff, const RenderStyle* oldStyl
     if (needsResetText || oldTransform != newStyle.textTransform() || oldSecurity != newStyle.textSecurity())
         RenderText::setText(originalText(), true);
 
-    if ((diff >= StyleDifference::Repaint || &style() != &firstLineStyle()) && layoutBox())
+    // FIXME: First line change on the block comes in as equal on text with inline box parent.
+    auto needsLayoutBoxStyleUpdate = (diff >= StyleDifference::Repaint || (is<RenderInline>(parent()) && &style() != &firstLineStyle())) && layoutBox();
+    if (needsLayoutBoxStyleUpdate)
         LayoutIntegration::LineLayout::updateStyle(*this);
 }
 
@@ -978,7 +980,7 @@ RenderText::Widths RenderText::trimmedPreferredWidths(float leadWidth, bool& str
     if (text()[0] == ' ' || (text()[0] == '\n' && !style.preserveNewline()) || text()[0] == '\t') {
         auto& font = style.fontCascade(); // FIXME: This ignores first-line.
         if (stripFrontSpaces)
-            widths.max -= font.width(RenderBlock::constructTextRun(&space, 1, style));
+            widths.max -= font.width(RenderBlock::constructTextRun(span(space), style));
         else
             widths.max += font.wordSpacing();
     }
@@ -1723,8 +1725,10 @@ void RenderText::setTextInternal(const String& text, bool force)
 
 void RenderText::setText(const String& newContent, bool force)
 {
+    auto isDifferent = newContent != text();
     setTextInternal(newContent, force);
-    invalidateLineLayoutPathOnContentChangeIfNeeded(*this, 0, text().length());
+    if (isDifferent || force)
+        invalidateLineLayoutPathOnContentChangeIfNeeded(*this, 0, text().length());
 }
 
 void RenderText::setTextWithOffset(const String& newText, unsigned offset, unsigned, bool force)

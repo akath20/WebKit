@@ -3706,8 +3706,6 @@ webkit.org/b/236930 accessibility/ios-simulator/aria-details.html [ Crash Pass ]
 
 webkit.org/b/238284 editing/spelling/spellcheck-async-remove-frame.html [ Pass Crash ]
 
-webkit.org/b/238771 media/video-played-ranges-1.html [ Pass Failure ]
-
 webkit.org/b/237108 http/tests/websocket/tests/hybi/extensions.html [ Pass ]
 
 webkit.org/b/238824 http/tests/workers/service/openwindow-from-notification-click.html [ Pass Failure ]
@@ -6746,8 +6744,6 @@ webkit.org/b/245600 fast/attachment/attachment-wrapping-action.html [ ImageOnlyF
 
 webkit.org/b/245686 fast/text/system-font-fallback.html [ ImageOnlyFailure ]
 
-webkit.org/b/245710 media/video-played-reset.html [ Pass Failure ]
-
 webkit.org/b/237547 fast/canvas/webgl/gl-teximage-imagebitmap-memory.html [ Pass Timeout ]
 
 webkit.org/b/245745 [ Debug ] svg/compositing/inline-svg-non-integer-position-display-inline-composited.html [ Skip ]
@@ -7330,8 +7326,6 @@ webkit.org/b/254872 webrtc/video-rotation.html [ Pass Timeout ]
 fast/overflow/infiniteRecursion.html [ Failure Pass ]
 tables/mozilla/bugs/bug2479-2.html [ Failure Pass ]
 
-webkit.org/b/271764 fast/scrolling/ios/video-atop-overflow-scroll.html [ Pass Failure ]
-
 webkit.org/b/271931 [ Debug ] imported/w3c/web-platform-tests/css/css-text/text-transform/text-transform-upperlower-105.html [ Crash ]
 
 webkit.org/b/271994 imported/w3c/web-platform-tests/css/css-transforms/transform3d-preserve3d-001.html [ Failure ]
@@ -7342,3 +7336,7 @@ fast/forms/switch/click-animation-redundant-disabled.html [ ImageOnlyFailure ]
 fast/forms/switch/click-animation.html [ ImageOnlyFailure ]
 
 webkit.org/b/271969 accessibility/ios-simulator/inline-prediction-attributed-string.html [ Failure ]
+
+webkit.org/b/272910 fast/scrolling/ios/video-atop-overflow-scroll.html [ Skip ]
+
+webkit.org/b/272944 [ Debug ] imported/w3c/web-platform-tests/css/css-contain/content-visibility/content-visibility-form-controls-crash.html [ Skip ]

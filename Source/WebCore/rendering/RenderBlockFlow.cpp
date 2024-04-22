@@ -2344,7 +2344,7 @@ void RenderBlockFlow::styleDidChange(StyleDifference diff, const RenderStyle* ol
         parentBlock->markSiblingsWithFloatsForLayout();
     }
 
-    if (diff == StyleDifference::Layout && selfNeedsLayout()) {
+    if (diff == StyleDifference::Layout && selfNeedsLayout() && childrenInline()) {
         for (auto walker = InlineWalker(*this); !walker.atEnd(); walker.advance())
             walker.current()->setPreferredLogicalWidthsDirty(true);
     }
@@ -4477,7 +4477,7 @@ static inline void stripTrailingSpace(float& inlineMax, float& inlineMin, Render
         // Collapse away the trailing space at the end of a block.
         const UChar space = ' ';
         const FontCascade& font = renderText->style().fontCascade(); // FIXME: This ignores first-line.
-        float spaceWidth = font.width(RenderBlock::constructTextRun(&space, 1, renderText->style()));
+        float spaceWidth = font.width(RenderBlock::constructTextRun(span(space), renderText->style()));
         inlineMax -= spaceWidth + font.wordSpacing();
         if (inlineMin > inlineMax)
             inlineMin = inlineMax;

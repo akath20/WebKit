@@ -67,6 +67,7 @@
 #include "PluginView.h"
 #include "PolicyDecision.h"
 #include "PrintInfo.h"
+#include "RemoteNativeImageBackendProxy.h"
 #include "RemoteRenderingBackendProxy.h"
 #include "RemoteScrollingCoordinator.h"
 #include "RemoteWebInspectorUI.h"
@@ -174,6 +175,7 @@
 #include <WebCore/ArchiveResource.h>
 #include <WebCore/BackForwardCache.h>
 #include <WebCore/BackForwardController.h>
+#include <WebCore/BitmapImage.h>
 #include <WebCore/CachedPage.h>
 #include <WebCore/Chrome.h>
 #include <WebCore/CommonVM.h>
@@ -338,6 +340,7 @@
 #include "WKStringCF.h"
 #include "WebRemoteObjectRegistry.h"
 #include <WebCore/LegacyWebArchive.h>
+#include <pal/cf/CoreTextSoftLink.h>
 #include <pal/spi/cg/ImageIOSPI.h>
 #include <wtf/MachSendRight.h>
 #include <wtf/spi/darwin/SandboxSPI.h>
@@ -4603,12 +4606,14 @@ void WebPage::adjustSettingsForLockdownMode(Settings& settings, const WebPrefere
 #if ENABLE(WEB_AUDIO)
     settings.setWebAudioEnabled(false);
 #endif
+#if PLATFORM(COCOA)
     if (settings.downloadableBinaryFontTrustedTypes() != DownloadableBinaryFontTrustedTypes::None) {
         settings.setDownloadableBinaryFontTrustedTypes(
-            settings.lockdownFontParserEnabled()
+            (settings.lockdownFontParserEnabled() && PAL::canLoad_CoreText_CTFontManagerCreateMemorySafeFontDescriptorFromData())
                 ? DownloadableBinaryFontTrustedTypes::FallbackParser
                 : DownloadableBinaryFontTrustedTypes::Restricted);
     }
+#endif
 #if ENABLE(WEB_CODECS)
     settings.setWebCodecsVideoEnabled(false);
     settings.setWebCodecsAV1Enabled(false);
@@ -7683,6 +7688,30 @@ void WebPage::scheduleFullEditorStateUpdate()
         m_pendingEditorStateUpdateStatus = PendingEditorStateUpdateStatus::Scheduled;
 
     m_page->scheduleRenderingUpdate(RenderingUpdateStep::LayerFlush);
+}
+
+void WebPage::loadAndDecodeImage(WebCore::ResourceRequest&& request, std::optional<WebCore::FloatSize> sizeConstraint, CompletionHandler<void(std::variant<WebCore::ResourceError, Ref<WebCore::ShareableBitmap>>&&)>&& completionHandler)
+{
+    WebProcess::singleton().ensureNetworkProcessConnection().connection().sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::LoadImageForDecoding(WTFMove(request), m_webPageProxyIdentifier), [completionHandler = WTFMove(completionHandler), sizeConstraint] (std::variant<WebCore::ResourceError, Ref<WebCore::SharedBuffer>>&& result) mutable {
+        WTF::switchOn(result, [&] (const WebCore::ResourceError& error) {
+            completionHandler(error);
+        }, [&] (const Ref<WebCore::SharedBuffer>& buffer) {
+            RefPtr bitmapImage = WebCore::BitmapImage::create(nullptr);
+            bitmapImage->setData(buffer.ptr(), true);
+            RefPtr nativeImage = bitmapImage->primaryNativeImage();
+            if (!nativeImage)
+                return completionHandler({ });
+            RefPtr<ShareableBitmap> result;
+            if (sizeConstraint) {
+                FloatRect rect = largestRectWithAspectRatioInsideRect(nativeImage->size().aspectRatio(), FloatRect({ }, *sizeConstraint));
+                result = ShareableBitmap::createFromImageDraw(*nativeImage, nativeImage->colorSpace(), flooredIntSize(rect.size()));
+            } else
+                result = ShareableBitmap::createFromImageDraw(*nativeImage);
+            if (!result)
+                return completionHandler({ });
+            completionHandler(result.releaseNonNull());
+        });
+    });
 }
 
 void WebPage::flushPendingThemeColorChange()

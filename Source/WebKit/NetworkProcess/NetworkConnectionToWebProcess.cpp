@@ -208,6 +208,14 @@ void NetworkConnectionToWebProcess::hasUploadStateChanged(bool hasUpload)
     m_networkProcess->parentProcessConnection()->send(Messages::NetworkProcessProxy::SetWebProcessHasUploads(m_webProcessIdentifier, hasUpload), 0);
 }
 
+void NetworkConnectionToWebProcess::loadImageForDecoding(WebCore::ResourceRequest&& request, WebPageProxyIdentifier pageID,  CompletionHandler<void(std::variant<WebCore::ResourceError, Ref<WebCore::SharedBuffer>>&&)>&& completionHandler)
+{
+    CheckedPtr networkSession = this->networkSession();
+    if (!networkSession)
+        return completionHandler({ });
+    networkSession->loadImageForDecoding(WTFMove(request), pageID, WTFMove(completionHandler));
+}
+
 void NetworkConnectionToWebProcess::didCleanupResourceLoader(NetworkResourceLoader& loader)
 {
     RELEASE_ASSERT(loader.coreIdentifier());
@@ -335,7 +343,7 @@ void NetworkConnectionToWebProcess::didReceiveMessage(IPC::Connection& connectio
         return;
 #endif
 
-    WTFLogAlways("Unhandled network process message '%s'", description(decoder.messageName()));
+    WTFLogAlways("Unhandled network process message '%s'", description(decoder.messageName()).characters());
     ASSERT_NOT_REACHED();
 }
 
@@ -414,7 +422,7 @@ bool NetworkConnectionToWebProcess::didReceiveSyncMessage(IPC::Connection& conne
         return true;
 #endif
 
-    WTFLogAlways("Unhandled network process message '%s'", description(decoder.messageName()));
+    WTFLogAlways("Unhandled network process message '%s'", description(decoder.messageName()).characters());
     ASSERT_NOT_REACHED();
     return false;
 }
@@ -473,7 +481,7 @@ void NetworkConnectionToWebProcess::didClose(IPC::Connection& connection)
 
 void NetworkConnectionToWebProcess::didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName messageName)
 {
-    RELEASE_LOG_FAULT(IPC, "Received an invalid message '%" PUBLIC_LOG_STRING "' from WebContent process %" PRIu64 ", requesting for it to be terminated.", description(messageName), m_webProcessIdentifier.toUInt64());
+    RELEASE_LOG_FAULT(IPC, "Received an invalid message '%" PUBLIC_LOG_STRING "' from WebContent process %" PRIu64 ", requesting for it to be terminated.", description(messageName).characters(), m_webProcessIdentifier.toUInt64());
     m_networkProcess->parentProcessConnection()->send(Messages::NetworkProcessProxy::TerminateWebProcess(m_webProcessIdentifier), 0);
 }
 

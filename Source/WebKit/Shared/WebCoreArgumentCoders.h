@@ -32,8 +32,8 @@
 #include <wtf/ArgumentCoder.h>
 #include <wtf/EnumTraits.h>
 
-#if USE(CURL)
-#include <WebCore/CurlProxySettings.h>
+#if USE(SKIA)
+#include <skia/core/SkColorSpace.h>
 #endif
 
 #if PLATFORM(GTK)
@@ -70,25 +70,12 @@ template<> struct ArgumentCoder<WebCore::FontCustomPlatformData> {
 };
 #endif
 
-#if USE(CURL)
-template<> struct ArgumentCoder<WebCore::CurlProxySettings> {
-    static void encode(Encoder&, const WebCore::CurlProxySettings&);
-    static std::optional<WebCore::CurlProxySettings> decode(Decoder&);
+#if USE(SKIA)
+template<> struct ArgumentCoder<sk_sp<SkColorSpace>> {
+    static void encode(Encoder&, const sk_sp<SkColorSpace>&);
+    static void encode(StreamConnectionEncoder&, const sk_sp<SkColorSpace>&);
+    static std::optional<sk_sp<SkColorSpace>> decode(Decoder&);
 };
 #endif
 
 } // namespace IPC
-namespace WTF {
-
-#if USE(CURL)
-template <> struct EnumTraits<WebCore::CurlProxySettings::Mode> {
-    using values = EnumValues<
-        WebCore::CurlProxySettings::Mode,
-        WebCore::CurlProxySettings::Mode::Default,
-        WebCore::CurlProxySettings::Mode::NoProxy,
-        WebCore::CurlProxySettings::Mode::Custom
-    >;
-};
-#endif
-
-} // namespace WTF

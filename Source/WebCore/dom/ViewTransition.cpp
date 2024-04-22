@@ -271,17 +271,29 @@ static ExceptionOr<void> checkDuplicateViewTransitionName(const AtomString& name
     return { };
 }
 
-static RefPtr<ImageBuffer> snapshotNodeVisualOverflowClippedToViewport(LocalFrame& frame, Node& node, LayoutRect& oldOverflowRect)
+static LayoutRect captureOverflowRect(Element& element)
 {
-    if (!node.renderer())
+    CheckedPtr renderer = dynamicDowncast<RenderLayerModelObject>(element.renderer());
+    if (!renderer || !renderer->hasLayer())
+        return { };
+
+    if (renderer->isDocumentElementRenderer()) {
+        auto& frameView = renderer->view().frameView();
+        return { { }, LayoutSize { frameView.frameRect().width(), frameView.frameRect().height() } };
+    }
+
+    return renderer->layer()->calculateLayerBounds(renderer->layer(), LayoutSize(), { RenderLayer::IncludeFilterOutsets, RenderLayer::ExcludeHiddenDescendants, RenderLayer::IncludeCompositedDescendants, RenderLayer::PreserveAncestorFlags });
+}
+
+static RefPtr<ImageBuffer> snapshotElementVisualOverflowClippedToViewport(LocalFrame& frame, Element& element, const LayoutRect& snapshotRect)
+{
+    if (!element.renderer())
         return nullptr;
 
-    ASSERT(node.renderer()->hasLayer());
-    CheckedPtr layerRenderer = downcast<RenderLayerModelObject>(node.renderer());
+    ASSERT(element.renderer()->hasLayer());
+    CheckedPtr layerRenderer = downcast<RenderLayerModelObject>(element.renderer());
 
-    oldOverflowRect = layerRenderer->layer()->localBoundingBox(RenderLayer::IncludeRootBackgroundPaintingArea);
-
-    IntRect paintRect = snappedIntRect(oldOverflowRect);
+    IntRect paintRect = snappedIntRect(snapshotRect);
 
     ASSERT(frame.page());
     float scaleFactor = frame.page()->deviceScaleFactor();
@@ -345,8 +357,12 @@ ExceptionOr<void> ViewTransition::captureOldState()
     ListHashSet<AtomString> usedTransitionNames;
     Vector<Ref<Element>> captureElements;
     Ref document = *m_document;
+    // Ensure style & render tree are up-to-date.
+    document->updateStyleIfNeeded();
+
     if (CheckedPtr view = document->renderView()) {
         m_initialLargeViewportSize = view->sizeForCSSLargeViewportUnits();
+
         auto result = forEachElementInPaintOrder([&](Element& element) -> ExceptionOr<void> {
             if (auto name = effectiveViewTransitionName(element); !name.isNull()) {
                 if (auto check = checkDuplicateViewTransitionName(name, usedTransitionNames); check.hasException())
@@ -367,8 +383,9 @@ ExceptionOr<void> ViewTransition::captureOldState()
         CapturedElement capture;
 
         capture.oldProperties = copyElementBaseProperties(element, capture.oldSize);
+        capture.oldOverflowRect = captureOverflowRect(element);
         if (m_document->frame())
-            capture.oldImage = snapshotNodeVisualOverflowClippedToViewport(*m_document->frame(), element.get(), capture.oldOverflowRect);
+            capture.oldImage = snapshotElementVisualOverflowClippedToViewport(*m_document->frame(), element, capture.oldOverflowRect);
 
         auto transitionName = element->computedStyle()->viewTransitionName();
         m_namedElements.add(transitionName->name, capture);
@@ -495,6 +512,9 @@ void ViewTransition::activateViewTransition()
 {
     if (m_phase == ViewTransitionPhase::Done)
         return;
+
+    // Ensure style & render tree are up-to-date.
+    protectedDocument()->updateStyleIfNeeded();
 
     // FIXME: Set rendering suppression for view transitions to false.
     if (!protectedDocument()->renderView() || protectedDocument()->renderView()->sizeForCSSLargeViewportUnits() != m_initialLargeViewportSize) {
@@ -683,9 +703,7 @@ ExceptionOr<void> ViewTransition::updatePseudoElementStyles()
 
             LayoutSize boxSize;
             properties = copyElementBaseProperties(*newElement, boxSize);
-            LayoutRect overflowRect;
-            if (renderBox->hasLayer())
-                overflowRect = renderBox->layer()->localBoundingBox(RenderLayer::IncludeRootBackgroundPaintingArea);
+            LayoutRect overflowRect = captureOverflowRect(*newElement);
 
             if (RefPtr documentElement = m_document->documentElement()) {
                 Styleable styleable(*documentElement, Style::PseudoElementIdentifier { PseudoId::ViewTransitionNew, name });
@@ -708,6 +726,17 @@ ExceptionOr<void> ViewTransition::updatePseudoElementStyles()
 
     protectedDocument()->styleScope().didChangeStyleSheetContents();
     return { };
+}
+
+RenderViewTransitionCapture* ViewTransition::viewTransitionNewPseudoForCapturedElement(Element& element)
+{
+    for (auto& [name, capturedElement] : m_namedElements.map()) {
+        if (capturedElement->newElement == &element) {
+            Styleable styleable(*element.document().documentElement(), Style::PseudoElementIdentifier { PseudoId::ViewTransitionNew, name });
+            return dynamicDowncast<RenderViewTransitionCapture>(styleable.renderer());
+        }
+    }
+    return nullptr;
 }
 
 }

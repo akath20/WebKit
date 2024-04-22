@@ -657,11 +657,11 @@ void RenderLayerBacking::updateOpacity(const RenderStyle& style)
 void RenderLayerBacking::updateTransform(const RenderStyle& style)
 {
     TransformationMatrix t;
-    if (renderer().capturedInViewTransition()) {
-        Styleable styleable(*renderer().document().documentElement(), Style::PseudoElementIdentifier { PseudoId::ViewTransitionNew, style.viewTransitionName()->name });
-        CheckedPtr renderer = styleable.renderer();
-        if (CheckedPtr viewTransitionCapture = dynamicDowncast<RenderViewTransitionCapture>(renderer.get()))
-            t.scaleNonUniform(viewTransitionCapture->scale().width(), viewTransitionCapture->scale().height());
+    if (renderer().capturedInViewTransition() && renderer().element()) {
+        if (RefPtr activeViewTransition = renderer().document().activeViewTransition()) {
+            if (CheckedPtr viewTransitionCapture = activeViewTransition->viewTransitionNewPseudoForCapturedElement(*renderer().element()))
+                t.scaleNonUniform(viewTransitionCapture->scale().width(), viewTransitionCapture->scale().height());
+        }
     } else if (m_owningLayer.isTransformed())
         m_owningLayer.updateTransformFromStyle(t, style, RenderStyle::individualTransformOperations());
     
@@ -1418,10 +1418,13 @@ void RenderLayerBacking::updateGeometry(const RenderLayer* compositedAncestor)
     // is handled using a synthesized 'transform' property on the wrapping
     // ::view-transition-new element. Move the parent graphics layer rect to our
     // position so that layer positions are computed relative to our origin.
-    if (renderer().capturedInViewTransition()) {
-        auto bounds = m_owningLayer.localBoundingBox({ RenderLayer::DontConstrainForMask , RenderLayer::IncludeRootBackgroundPaintingArea });
-        ComputedOffsets computedOffsets(m_owningLayer, compositedAncestor, bounds, { }, { });
-        parentGraphicsLayerRect.move(computedOffsets.fromParentGraphicsLayer());
+    if (renderer().capturedInViewTransition() && renderer().element()) {
+        if (RefPtr activeViewTransition = renderer().document().activeViewTransition()) {
+            if (CheckedPtr viewTransitionCapture = activeViewTransition->viewTransitionNewPseudoForCapturedElement(*renderer().element())) {
+                ComputedOffsets computedOffsets(m_owningLayer, compositedAncestor, viewTransitionCapture->captureOverflowRect(), { }, { });
+                parentGraphicsLayerRect.move(computedOffsets.fromParentGraphicsLayer());
+            }
+        }
     }
 
     if (m_ancestorClippingStack)
@@ -3806,7 +3809,7 @@ void RenderLayerBacking::paintContents(const GraphicsLayer* graphicsLayer, Graph
         paintIntoLayer(graphicsLayer, context, dirtyRect, behavior);
 
         auto visibleDebugOverlayRegions = OptionSet<DebugOverlayRegions>::fromRaw(renderer().settings().visibleDebugOverlayRegions());
-        if (visibleDebugOverlayRegions.containsAny({ DebugOverlayRegions::TouchActionRegion, DebugOverlayRegions::EditableElementRegion, DebugOverlayRegions::WheelEventHandlerRegion, DebugOverlayRegions::InteractionRegion }))
+        if (visibleDebugOverlayRegions.containsAny({ DebugOverlayRegions::TouchActionRegion, DebugOverlayRegions::EditableElementRegion, DebugOverlayRegions::WheelEventHandlerRegion, DebugOverlayRegions::InteractionRegion, DebugOverlayRegions::SiteIsolationRegion }))
             paintDebugOverlays(graphicsLayer, context);
 
     } else if (graphicsLayer == layerForHorizontalScrollbar()) {

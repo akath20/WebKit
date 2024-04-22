@@ -424,7 +424,7 @@ DEFINE_DEBUG_ONLY_GLOBAL(WTF::RefCountedLeakCounter, webPageProxyCounter, ("WebP
 #if PLATFORM(COCOA)
 static WorkQueue& sharedFileQueue()
 {
-    static NeverDestroyed<Ref<WorkQueue>> queue(WorkQueue::create("com.apple.WebKit.WebPageSharedFileQueue"));
+    static NeverDestroyed<Ref<WorkQueue>> queue(WorkQueue::create("com.apple.WebKit.WebPageSharedFileQueue"_s));
     return queue.get();
 }
 #endif
@@ -3450,6 +3450,9 @@ void WebPageProxy::handleMouseEventReply(WebEventType eventType, bool handled, c
 void WebPageProxy::sendMouseEvent(const WebCore::FrameIdentifier& frameID, const NativeWebMouseEvent& event, std::optional<Vector<SandboxExtensionHandle>>&& sandboxExtensions)
 {
     protectedProcess()->recordUserGestureAuthorizationToken(webPageID(), event.authorizationToken());
+    if (event.isActivationTriggeringEvent())
+        internals().lastActivationTimestamp = MonotonicTime::now();
+
     sendToProcessContainingFrame(frameID, Messages::WebPage::MouseEvent(frameID, event, WTFMove(sandboxExtensions)), [this, protectedThis = Ref { *this }] (std::optional<WebEventType> eventType, bool handled, std::optional<WebCore::RemoteUserInputEventData> remoteUserInputEventData) {
         if (!m_pageClient)
             return;
@@ -3799,6 +3802,8 @@ const NativeWebKeyboardEvent& WebPageProxy::firstQueuedKeyEvent() const
 void WebPageProxy::sendKeyEvent(const NativeWebKeyboardEvent& event)
 {
     protectedProcess()->recordUserGestureAuthorizationToken(webPageID(), event.authorizationToken());
+    if (event.isActivationTriggeringEvent())
+        internals().lastActivationTimestamp = MonotonicTime::now();
 
     auto handleKeyEventReply = [this, protectedThis = Ref { *this }] (std::optional<WebEventType> eventType, bool handled) {
         if (!m_pageClient)
@@ -3951,6 +3956,9 @@ void WebPageProxy::handleGestureEvent(const NativeWebGestureEvent& event)
 #if ENABLE(IOS_TOUCH_EVENTS)
 void WebPageProxy::sendPreventableTouchEvent(WebCore::FrameIdentifier frameID, const NativeWebTouchEvent& event)
 {
+    if (event.isActivationTriggeringEvent())
+        internals().lastActivationTimestamp = MonotonicTime::now();
+
     sendToProcessContainingFrame(frameID, Messages::EventDispatcher::TouchEvent(internals().webPageID, frameID, event), [this, weakThis = WeakPtr { *this }, event = event] (bool handled, std::optional<RemoteUserInputEventData> remoteTouchEventData) mutable {
         RefPtr protectedThis = weakThis.get();
         if (!protectedThis)
@@ -4074,6 +4082,9 @@ void WebPageProxy::resetPotentialTapSecurityOrigin()
 
 void WebPageProxy::sendUnpreventableTouchEvent(WebCore::FrameIdentifier frameID, const NativeWebTouchEvent& event)
 {
+    if (event.isActivationTriggeringEvent())
+        internals().lastActivationTimestamp = MonotonicTime::now();
+
     sendToProcessContainingFrame(frameID, Messages::EventDispatcher::TouchEvent(internals().webPageID, frameID, event), [this, protectedThis = Ref { *this }, event = event] (bool, std::optional<RemoteUserInputEventData> remoteTouchEventData) mutable {
         if (!remoteTouchEventData)
             return;
@@ -6278,6 +6289,7 @@ void WebPageProxy::didCommitLoadForFrame(FrameIdentifier frameID, FrameInfoData&
 #endif
         internals().pageAllowedToRunInTheBackgroundActivityDueToTitleChanges = nullptr;
         internals().pageAllowedToRunInTheBackgroundActivityDueToNotifications = nullptr;
+        internals().didCommitLoadForMainFrameTimestamp = MonotonicTime::now();
     }
 
     auto transaction = internals().pageLoadState.transaction();
@@ -6716,11 +6728,16 @@ void WebPageProxy::didReceiveTitleForFrame(FrameIdentifier frameID, const String
 #if PLATFORM(IOS_FAMILY)
         deviceClassIsSmallScreen = PAL::deviceClassIsSmallScreen();
 #endif
-        if (!deviceClassIsSmallScreen && !internals().pageAllowedToRunInTheBackgroundActivityDueToTitleChanges && !frame->title().isNull() && frame->title() != title) {
-            WEBPAGEPROXY_RELEASE_LOG(ViewState, "didReceiveTitleForFrame: This page changes its title in the background and is allowed to run in the background");
-            // This page updates its title in the background and is thus able to communicate with
-            // the user while in the background. Allow it to run in the background.
-            internals().pageAllowedToRunInTheBackgroundActivityDueToTitleChanges = process().throttler().backgroundActivity("Page updates its title"_s).moveToUniquePtr();
+        if (!deviceClassIsSmallScreen) {
+            bool isTitleChangeLikelyDueToUserAction = [&] {
+                bool hasRecentUserActivation = (MonotonicTime::now() - internals().lastActivationTimestamp) <= 5_s;
+                bool hasRecentlyCommittedLoad = (MonotonicTime::now() - internals().didCommitLoadForMainFrameTimestamp) <= 5_s;
+                return hasRecentUserActivation || hasRecentlyCommittedLoad;
+            }();
+            if (!isTitleChangeLikelyDueToUserAction && !internals().pageAllowedToRunInTheBackgroundActivityDueToTitleChanges && !frame->title().isNull() && frame->title() != title) {
+                WEBPAGEPROXY_RELEASE_LOG(ViewState, "didReceiveTitleForFrame: This page updates its title without user interaction and is allowed to run in the background");
+                internals().pageAllowedToRunInTheBackgroundActivityDueToTitleChanges = process().throttler().backgroundActivity("Page updates its title"_s).moveToUniquePtr();
+            }
         }
     }
 
@@ -8059,6 +8076,13 @@ void WebPageProxy::downloadRequest(WebCore::ResourceRequest&& request, Completio
 void WebPageProxy::dataTaskWithRequest(WebCore::ResourceRequest&& request, const std::optional<WebCore::SecurityOriginData>& topOrigin, bool shouldRunAtForegroundPriority, CompletionHandler<void(API::DataTask&)>&& completionHandler)
 {
     websiteDataStore().protectedNetworkProcess()->dataTaskWithRequest(*this, sessionID(), WTFMove(request), topOrigin, shouldRunAtForegroundPriority, WTFMove(completionHandler));
+}
+
+void WebPageProxy::loadAndDecodeImage(WebCore::ResourceRequest&& request, std::optional<WebCore::FloatSize> sizeConstraint, CompletionHandler<void(std::variant<WebCore::ResourceError, Ref<WebCore::ShareableBitmap>>&&)>&& completionHandler)
+{
+    if (!hasRunningProcess())
+        launchProcess({ }, ProcessLaunchReason::InitialProcess);
+    sendWithAsyncReply(Messages::WebPage::LoadAndDecodeImage(request, sizeConstraint), WTFMove(completionHandler));
 }
 
 void WebPageProxy::didChangeContentSize(const IntSize& size)
@@ -9585,7 +9609,7 @@ URL WebPageProxy::currentResourceDirectoryURL() const
 void WebPageProxy::resetStateAfterProcessTermination(ProcessTerminationReason reason)
 {
     if (reason != ProcessTerminationReason::NavigationSwap)
-        WEBPAGEPROXY_RELEASE_LOG_ERROR(Process, "processDidTerminate: (pid %d), reason=%" PUBLIC_LOG_STRING, processID(), processTerminationReasonToString(reason));
+        WEBPAGEPROXY_RELEASE_LOG_ERROR(Process, "processDidTerminate: (pid %d), reason=%" PUBLIC_LOG_STRING, processID(), processTerminationReasonToString(reason).characters());
 
     ASSERT(m_hasRunningProcess);
 
@@ -9643,7 +9667,7 @@ static bool shouldReloadAfterProcessTermination(ProcessTerminationReason reason)
 
 void WebPageProxy::dispatchProcessDidTerminate(ProcessTerminationReason reason)
 {
-    WEBPAGEPROXY_RELEASE_LOG_ERROR(Loading, "dispatchProcessDidTerminate: reason=%" PUBLIC_LOG_STRING, processTerminationReasonToString(reason));
+    WEBPAGEPROXY_RELEASE_LOG_ERROR(Loading, "dispatchProcessDidTerminate: reason=%" PUBLIC_LOG_STRING, processTerminationReasonToString(reason).characters());
 
     bool handledByClient = false;
     if (m_loaderClient)
@@ -13506,10 +13530,14 @@ void WebPageProxy::generateTestReport(const String& message, const String& group
     send(Messages::WebPage::GenerateTestReport(message, group));
 }
 
-WebProcessProxy* WebPageProxy::processForRegistrableDomain(const WebCore::RegistrableDomain& domain)
+WebProcessProxy* WebPageProxy::processForRegistrableDomain(const WebCore::RegistrableDomain& domain, const WebsiteDataStore& websiteDataStore)
 {
     auto* process = m_browsingContextGroup->processForDomain(domain);
-    return process ? &process->process() : nullptr;
+    if (!process)
+        return nullptr;
+
+    auto* processWebsiteDataStore = process->process().websiteDataStore();
+    return processWebsiteDataStore == &websiteDataStore ? &process->process() : nullptr;
 }
 
 WebPageProxy* WebPageProxy::openerPage() const

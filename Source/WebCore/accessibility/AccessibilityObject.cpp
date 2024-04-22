@@ -2538,6 +2538,15 @@ const AtomString& AccessibilityObject::getAttribute(const QualifiedName& attribu
     return element ? element->attributeWithDefaultARIA(attribute) : nullAtom();
 }
 
+String AccessibilityObject::getAttributeTrimmed(const QualifiedName& attribute) const
+{
+    const auto& rawValue = getAttribute(attribute);
+    if (rawValue.isEmpty())
+        return { };
+    auto value = rawValue.string();
+    return value.trim(isASCIIWhitespace).simplifyWhiteSpace(isASCIIWhitespace);
+}
+
 String AccessibilityObject::nameAttribute() const
 {
     return getAttribute(nameAttr);
@@ -2905,8 +2914,7 @@ String AccessibilityObject::embeddedImageDescription() const
 // ARIA spec: User agents must not expose the aria-roledescription property if the element to which aria-roledescription is applied does not have a valid WAI-ARIA role or does not have an implicit WAI-ARIA role semantic.
 bool AccessibilityObject::supportsARIARoleDescription() const
 {
-    auto role = this->roleValue();
-    switch (role) {
+    switch (roleValue()) {
     case AccessibilityRole::Generic:
     case AccessibilityRole::Unknown:
         return false;
@@ -2930,11 +2938,11 @@ String AccessibilityObject::roleDescription() const
 
     if (roleValue() == AccessibilityRole::Figure)
         return AXFigureText();
-    
+
     if (roleValue() == AccessibilityRole::Suggestion)
         return AXSuggestionRoleDescriptionText();
 
-    return roleDescription;
+    return { };
 }
 
 bool nodeHasPresentationRole(Node* node)
@@ -4434,7 +4442,7 @@ void AccessibilityObject::setIsIgnoredFromParentDataForChild(AccessibilityObject
 
     AccessibilityIsIgnoredFromParentData result = AccessibilityIsIgnoredFromParentData(this);
     if (!m_isIgnoredFromParentData.isNull()) {
-        result.isAXHidden = (m_isIgnoredFromParentData.isAXHidden || child->isARIAHidden());
+        result.isAXHidden = (m_isIgnoredFromParentData.isAXHidden || child->isARIAHidden()) && !child->isFocused();
         result.isPresentationalChildOfAriaRole = m_isIgnoredFromParentData.isPresentationalChildOfAriaRole || ariaRoleHasPresentationalChildren();
         result.isDescendantOfBarrenParent = m_isIgnoredFromParentData.isDescendantOfBarrenParent || !canHaveChildren();
     } else {

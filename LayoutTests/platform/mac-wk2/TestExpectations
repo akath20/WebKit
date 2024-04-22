@@ -7,6 +7,7 @@ compositing/shared-backing/overflow-scroll [ Pass ]
 compositing/scrolling/async-overflow-scrolling [ Pass ]
 compositing/layer-creation/clipping-scope [ Pass ]
 editing/find/cocoa [ Pass ]
+editing/input/mac [ Pass ]
 editing/undo-manager [ Pass ]
 editing/pasteboard/dom-paste [ Pass ]
 fast/attachment/cocoa [ Pass ]
@@ -514,8 +515,6 @@ webkit.org/b/104954 http/tests/canvas/canvas-slow-font-loading.html [ ImageOnlyF
 webkit.org/b/114302 platform/mac-wk2/plugins/mouse-events-scaled-iframe.html [ Pass Failure Crash ]
 
 webkit.org/b/114572 platform/mac-wk2/plugins/mouse-events-scaled.html [ Pass Failure ]
-
-webkit.org/b/117962 media/video-played-collapse.html [ Pass Failure ]
 
 webkit.org/b/136109 fast/multicol/mixed-opacity-fixed-test.html  [ ImageOnlyFailure ]
 
@@ -1912,3 +1911,8 @@ webkit.org/b/271063 http/tests/navigation/page-cache-getUserMedia-pending-promis
 webkit.org/b/271318 [ Debug ] http/wpt/webauthn/public-key-credential-get-failure-local-silent.https.html [ Skip ]
 
 webkit.org/b/272685 [ Ventura+ x86_64 ] imported/w3c/web-platform-tests/svg/painting/reftests/percentage-attribute.svg [ ImageOnlyFailure ]
+
+# Inline predictions are only supported on Sonoma and later.
+[ Monterey Ventura ] editing/input/mac/show-inline-prediction-with-adjacent-text.html [ Skip ]
+
+webkit.org/b/273012 [ Ventura+ x86_64 ] imported/w3c/web-platform-tests/svg/painting/reftests/percentage.svg [ ImageOnlyFailure ]
